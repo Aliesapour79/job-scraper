@@ -9,28 +9,8 @@ from webdriver_manager.chrome import ChromeDriverManager
 import time
 import json
 from datetime import datetime
+
 from nlp.scorer import score_jobs
-
-# ==========================================
-# BALANCED SKILL SYSTEM v3.2
-# ==========================================
-
-CORE_SKILLS = [
-    "iot", "embedded", "esp32", "pcb",
-    "الکترونیک", "میکروکنترلر",
-    "machine learning", "ai", "opencv",
-    "arduino", "سخت افزار", "سخت‌افزار"
-]
-
-SECONDARY_SKILLS = [
-    "it", "network", "linux", "excel",
-    "sql", "office", "admin", "data"
-]
-
-NOISE_SKILLS = [
-    "آبدارچی", "نظافت", "خدماتی",
-    "cleaner", "janitor"
-]
 
 
 # ==========================================
@@ -47,12 +27,12 @@ def setup_driver():
 
 
 # ==========================================
-# EXTRACT JOB PAGE
+# EXTRACT SINGLE JOB PAGE
 # ==========================================
 def extract_job_details(driver, url):
     try:
         driver.get(url)
-        time.sleep(4)
+        time.sleep(3)
 
         body_text = driver.find_element(By.TAG_NAME, "body").text
 
@@ -66,34 +46,40 @@ def extract_job_details(driver, url):
         except:
             company = "Unknown"
 
-        combined_text = f"{title}\n{company}\n{body_text}"
+        combined_text = f"""
+Title: {title}
+Company: {company}
+Content:
+{body_text}
+"""
 
         return combined_text, body_text
 
     except Exception as e:
-        print(f"Error extracting: {e}")
+        print(f"❌ Error extracting job page: {e}")
         return "", ""
 
 
 # ==========================================
-# EXTRACT JOB LIST
+# EXTRACT ALL JOBS FROM LIST PAGE
 # ==========================================
-def extract_all_jobs(driver, url):
-    print("Loading page...")
+def extract_all_jobs(driver, url, limit=80):
+    print("🌐 Loading job list page...")
     driver.get(url)
 
     wait = WebDriverWait(driver, 20)
     wait.until(EC.presence_of_element_located((By.CLASS_NAME, "search-list")))
 
     job_links = driver.find_elements(By.CSS_SELECTOR, ".search-list .item a.item-content")
-    print(f"Found {len(job_links)} jobs")
+
+    print(f"🔎 Found {len(job_links)} jobs")
 
     jobs = []
     main_window = driver.current_window_handle
 
-    for i, link in enumerate(job_links[:80], 1):
+    for i, link in enumerate(job_links[:limit], 1):
         try:
-            print(f"Job {i}/{len(job_links)}")
+            print(f"➡️ Processing {i}/{len(job_links)}")
 
             title = link.text.split("\n")[0]
             url = link.get_attribute("href")
@@ -101,11 +87,13 @@ def extract_all_jobs(driver, url):
             if not url:
                 continue
 
+            # open new tab
             driver.execute_script("window.open('');")
             driver.switch_to.window(driver.window_handles[1])
 
-            text, raw = extract_job_details(driver, url)
+            full_text, raw = extract_job_details(driver, url)
 
+            # close tab
             driver.close()
             driver.switch_to.window(main_window)
 
@@ -113,14 +101,16 @@ def extract_all_jobs(driver, url):
                 "title": title,
                 "company": "Unknown",
                 "url": url,
-                "full_text": text,
-                "description": raw[:400]
+                "full_text": full_text,
+                "description": raw[:500]
             })
 
-            print(f"OK: {title}")
+            print(f"   ✅ OK: {title}")
 
         except Exception as e:
-            print(f"Skip job {i}: {e}")
+            print(f"   ⚠️ Skip job {i}: {e}")
+
+            # safety fallback
             if len(driver.window_handles) > 1:
                 driver.close()
                 driver.switch_to.window(main_window)
@@ -134,38 +124,50 @@ def extract_all_jobs(driver, url):
 def main():
     url = "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%B4%D9%87%D8%B1-%D9%82%D8%AF%D8%B3"
 
-    print("=" * 50)
-    print("JOB SCRAPER v3.2")
-    print("=" * 50)
+    print("=" * 60)
+    print("🚀 JOB SCRAPER v4.0 CLEAN ARCHITECTURE")
+    print("=" * 60)
 
     driver = setup_driver()
 
     try:
+        # ==========================================
+        # 1. SCRAPE DATA ONLY
+        # ==========================================
         jobs = extract_all_jobs(driver, url)
 
         if not jobs:
-            print("No jobs found")
+            print("❌ No jobs found")
             return
 
-        print(f"Extracted {len(jobs)} jobs")
+        print(f"\n📦 Extracted {len(jobs)} jobs")
 
-        # 🔥 IMPORTANT: scoring system (balanced version)
-        jobs = score_jobs(jobs, CORE_SKILLS, SECONDARY_SKILLS, NOISE_SKILLS)
+        # ==========================================
+        # 2. SCORING (ONLY HERE)
+        # ==========================================
+        jobs = score_jobs(jobs)
 
-        print("\nScoring results:")
-        for job in jobs:
-            print(f"{job['score']}% -> {job['title']}")
+        print("\n🎯 Scoring completed\n")
 
+        for j in jobs:
+            print(f"{j['score']}% → {j['title']}")
+
+        # ==========================================
+        # 3. SAVE OUTPUT
+        # ==========================================
         filename = f"job_matches_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(jobs, f, ensure_ascii=False, indent=2)
 
-        print("\nSaved:", filename)
+        print("\n" + "=" * 60)
+        print(f"💾 Saved: {filename}")
+        print(f"📊 Total jobs: {len(jobs)}")
+        print("=" * 60)
 
     finally:
         driver.quit()
-        print("Browser closed")
+        print("🧹 Browser closed")
 
 
 if __name__ == "__main__":
