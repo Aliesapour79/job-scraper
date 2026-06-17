@@ -197,7 +197,7 @@ def extract_all_jobs(driver, url):
     jobs_data = []
     main_window = driver.current_window_handle
     
-    for idx, link in enumerate(job_links, 1):
+    for idx, link in enumerate(job_links[:80], 1):
         try:
             print(f"Processing job {idx}/{len(job_links)}...")
             
