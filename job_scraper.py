@@ -11,6 +11,7 @@ from datetime import datetime
 import os
 import platform
 from webdriver_manager.chrome import ChromeDriverManager
+from nlp.scorer import score_jobs
 # ==========================================
 # SKILLS WEIGHT (Based on your resume)
 # ==========================================
@@ -290,7 +291,7 @@ def main():
         print("🌐 Connecting to website...")
         
         # Extract jobs
-        jobs = extract_all_jobs(driver, url)
+        jobs = score_jobs(jobs)
         
         if not jobs:
             print("❌ No jobs found!")
