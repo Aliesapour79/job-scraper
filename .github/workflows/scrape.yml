@@ -36,11 +36,17 @@ jobs:
         run: |
           python job_scraper.py
       
+      - name: Convert JSON to HTML
+        run: |
+          python json_to_html.py
+      
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
-          name: job-matches-json
-          path: job_matches_*.json
+          name: job-matches
+          path: |
+            job_matches_*.json
+            job_matches_*_report.html
           retention-days: 30
       
       - name: Send results to Telegram
@@ -54,20 +60,20 @@ jobs:
           TOKEN = "'"${{ secrets.TELEGRAM_BOT_TOKEN }}"'"
           CHAT_ID = "'"${{ secrets.TELEGRAM_CHAT_ID }}"'"
           if TOKEN != "" and CHAT_ID != "":
-              files = glob.glob("job_matches_*.json")
+              files = glob.glob("job_matches_*_report.html")
               if files:
                   for f in files:
                       with open(f, "rb") as file:
                           now = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
-                          caption = f"✅ اسکرپینگ انجام شد! {now}"
+                          caption = f"📊 گزارش اسکرپینگ {now}"
                           requests.post(
                               f"https://api.telegram.org/bot{TOKEN}/sendDocument",
                               data={"chat_id": CHAT_ID, "caption": caption},
                               files={"document": file}
                           )
-                  print("✅ فایل به تلگرام ارسال شد.")
+                  print("✅ فایل HTML به تلگرام ارسال شد.")
               else:
-                  print("⚠️ هیچ فایلی پیدا نشد!")
+                  print("⚠️ هیچ فایل HTML پیدا نشد!")
           else:
               print("⚠️ توکن یا آیدی تلگرام تنظیم نشده است!")
           '
