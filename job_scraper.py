@@ -10,7 +10,7 @@ import re
 from datetime import datetime
 import os
 import platform
-
+from webdriver_manager.chrome import ChromeDriverManager
 # ==========================================
 # SKILLS WEIGHT (Based on your resume)
 # ==========================================
