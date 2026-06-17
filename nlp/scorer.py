@@ -1,106 +1,86 @@
 from sentence_transformers import SentenceTransformer, util
 import numpy as np
 from scipy.stats import norm
+from .text_cleaner import clean_text
 
 # ==========================================
-# 1. MODEL LOAD
+# MODEL
 # ==========================================
 model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
 
-
 # ==========================================
-# 2. USER PROFILE (CORE INTENT)
+# USER PROFILE (can be dynamic now)
 # ==========================================
-USER_PROFILE = """
-Python, Embedded Systems, ESP32, IoT,
-Machine Learning, PCB Design, Electronics,
-C++, Microcontroller, AI, Image Processing
+DEFAULT_PROFILE = """
+Python Embedded Systems ESP32 IoT
+Machine Learning PCB Electronics
+C++ Microcontroller AI Image Processing
 """
 
-user_vec = model.encode(USER_PROFILE, convert_to_tensor=True)
+def get_user_vector(profile_text=DEFAULT_PROFILE):
+    return model.encode(profile_text, convert_to_tensor=True, normalize_embeddings=True)
 
+user_vec = get_user_vector()
 
 # ==========================================
-# 3. SIMPLE EMBEDDING CACHE
+# ENCODING CACHE
 # ==========================================
 _embedding_cache = {}
 
 def cached_encode(text):
+    text = clean_text(text)
+
     if text in _embedding_cache:
         return _embedding_cache[text]
 
-    vec = model.encode(text, convert_to_tensor=True)
+    vec = model.encode(text, convert_to_tensor=True, normalize_embeddings=True)
     _embedding_cache[text] = vec
     return vec
 
-
 # ==========================================
-# 4. CORE / SECONDARY / NOISE SYSTEM
-# ==========================================
-
-def build_skill_maps(core, secondary, noise):
-    return (
-        [x.lower() for x in core],
-        [x.lower() for x in secondary],
-        [x.lower() for x in noise]
-    )
-
-
-# ==========================================
-# 5. SEMANTIC SCORE
+# SCORE: SEMANTIC
 # ==========================================
 def semantic_score(text, user_vec):
     if not text:
         return 0
 
     job_vec = cached_encode(text)
-    score = util.cos_sim(user_vec, job_vec).item()
-
-    return max(0, min(score * 100, 100))
-
+    return max(0, min(util.cos_sim(user_vec, job_vec).item() * 100, 100))
 
 # ==========================================
-# 6. KEYWORD BOOST SYSTEM (BALANCED)
+# KEYWORD SCORE (FIXED SCALE)
 # ==========================================
-def keyword_boost(text, core, secondary, noise):
-    if not text:
-        return 0
-
+def keyword_score(text, core, secondary, noise):
     text = text.lower()
 
-    boost = 0
-    penalty = 0
+    score = 0
 
-    # CORE (high impact)
     for kw in core:
         if kw in text:
-            boost += 12
+            score += 10
 
-    # SECONDARY (soft support)
     for kw in secondary:
         if kw in text:
-            boost += 4
+            score += 4
 
-    # NOISE (hard penalty)
     for kw in noise:
         if kw in text:
-            penalty += 25
+            score -= 15
 
-    return boost - penalty
-
+    # normalize (IMPORTANT FIX)
+    return np.tanh(score / 50) * 100
 
 # ==========================================
-# 7. HYBRID RAW SCORE
+# HYBRID SCORE (BALANCED)
 # ==========================================
 def hybrid_score(text, user_vec, core, secondary, noise):
     sem = semantic_score(text, user_vec)
-    kw = keyword_boost(text, core, secondary, noise)
+    kw = keyword_score(text, core, secondary, noise)
 
-    return (0.70 * sem) + (0.30 * kw)
-
+    return (0.75 * sem) + (0.25 * kw)
 
 # ==========================================
-# 8. Z-NORMALIZATION (PROBABILITY STYLE)
+# NORMALIZATION
 # ==========================================
 def z_normalize(scores):
     mean = np.mean(scores)
@@ -109,52 +89,33 @@ def z_normalize(scores):
     if std == 0:
         return [50 for _ in scores]
 
-    z_scores = [(x - mean) / std for x in scores]
-
-    return [round(norm.cdf(z) * 100, 2) for z in z_scores]
-
+    z = [(x - mean) / std for x in scores]
+    return [round(norm.cdf(v) * 100, 2) for v in z]
 
 # ==========================================
-# 9. MAIN SCORER (v3.2)
+# MAIN
 # ==========================================
 def score_jobs(jobs, core_skills=None, secondary_skills=None, noise_skills=None):
-    if not jobs:
-        return []
 
-    if core_skills is None:
-        core_skills = []
-    if secondary_skills is None:
-        secondary_skills = []
-    if noise_skills is None:
-        noise_skills = []
+    core_skills = core_skills or []
+    secondary_skills = secondary_skills or []
+    noise_skills = noise_skills or []
 
-    core, secondary, noise = build_skill_maps(
-        core_skills, secondary_skills, noise_skills
-    )
+    core = [x.lower() for x in core_skills]
+    secondary = [x.lower() for x in secondary_skills]
+    noise = [x.lower() for x in noise_skills]
 
     raw_scores = []
 
-    # STEP 1: RAW SCORES
     for job in jobs:
         text = job.get("full_text", "")
-
-        score = hybrid_score(
-            text,
-            user_vec,
-            core,
-            secondary,
-            noise
-        )
-
+        score = hybrid_score(text, user_vec, core, secondary, noise)
         raw_scores.append(score)
 
-    # STEP 2: NORMALIZE
     normalized = z_normalize(raw_scores)
 
-    # STEP 3: INJECT RESULTS
     for i, job in enumerate(jobs):
         job["score"] = normalized[i]
         job["debug_raw_score"] = round(raw_scores[i], 2)
 
-    # STEP 4: SORT
     return sorted(jobs, key=lambda x: x["score"], reverse=True)
