@@ -4,57 +4,79 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 
 import time
 import json
 from datetime import datetime
-
-from webdriver_manager.chrome import ChromeDriverManager
 from nlp.scorer import score_jobs
 
+# ==========================================
+# BALANCED SKILL SYSTEM v3.2
+# ==========================================
+
+CORE_SKILLS = [
+    "iot", "embedded", "esp32", "pcb",
+    "الکترونیک", "میکروکنترلر",
+    "machine learning", "ai", "opencv",
+    "arduino", "سخت افزار", "سخت‌افزار"
+]
+
+SECONDARY_SKILLS = [
+    "it", "network", "linux", "excel",
+    "sql", "office", "admin", "data"
+]
+
+NOISE_SKILLS = [
+    "آبدارچی", "نظافت", "خدماتی",
+    "cleaner", "janitor"
+]
+
 
 # ==========================================
-# SETUP DRIVER
+# DRIVER SETUP
 # ==========================================
 def setup_driver():
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
     service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
-    return driver
+    return webdriver.Chrome(service=service, options=options)
 
 
 # ==========================================
-# EXTRACT JOB DETAILS
+# EXTRACT JOB PAGE
 # ==========================================
 def extract_job_details(driver, url):
     try:
         driver.get(url)
         time.sleep(4)
 
-        full_text = driver.find_element(By.TAG_NAME, "body").text
+        body_text = driver.find_element(By.TAG_NAME, "body").text
 
-        title = "Unknown"
         try:
-            title = driver.find_element(
-                By.CSS_SELECTOR,
-                ".entry-title h1, h1.entry-title span"
-            ).text.strip()
+            title = driver.find_element(By.CSS_SELECTOR, "h1").text
         except:
-            pass
+            title = "Unknown"
 
-        return title, full_text
+        try:
+            company = driver.find_element(By.CSS_SELECTOR, ".company, .employer").text
+        except:
+            company = "Unknown"
+
+        combined_text = f"{title}\n{company}\n{body_text}"
+
+        return combined_text, body_text
 
     except Exception as e:
-        print(f"Error: {e}")
-        return "Unknown", ""
+        print(f"Error extracting: {e}")
+        return "", ""
 
 
 # ==========================================
-# SCRAPE ALL JOBS
+# EXTRACT JOB LIST
 # ==========================================
 def extract_all_jobs(driver, url):
     print("Loading page...")
@@ -64,39 +86,44 @@ def extract_all_jobs(driver, url):
     wait.until(EC.presence_of_element_located((By.CLASS_NAME, "search-list")))
 
     job_links = driver.find_elements(By.CSS_SELECTOR, ".search-list .item a.item-content")
-
     print(f"Found {len(job_links)} jobs")
 
     jobs = []
-    main = driver.current_window_handle
+    main_window = driver.current_window_handle
 
     for i, link in enumerate(job_links[:80], 1):
         try:
-            href = link.get_attribute("href")
-            if not href:
+            print(f"Job {i}/{len(job_links)}")
+
+            title = link.text.split("\n")[0]
+            url = link.get_attribute("href")
+
+            if not url:
                 continue
 
             driver.execute_script("window.open('');")
             driver.switch_to.window(driver.window_handles[1])
 
-            title, full_text = extract_job_details(driver, href)
+            text, raw = extract_job_details(driver, url)
 
             driver.close()
-            driver.switch_to.window(main)
+            driver.switch_to.window(main_window)
 
             jobs.append({
                 "title": title,
-                "url": href,
-                "full_text": full_text
+                "company": "Unknown",
+                "url": url,
+                "full_text": text,
+                "description": raw[:400]
             })
 
-            print(f"{i}. extracted")
+            print(f"OK: {title}")
 
         except Exception as e:
-            print(f"Error on job {i}: {e}")
+            print(f"Skip job {i}: {e}")
             if len(driver.window_handles) > 1:
                 driver.close()
-                driver.switch_to.window(main)
+                driver.switch_to.window(main_window)
 
     return jobs
 
@@ -107,38 +134,38 @@ def extract_all_jobs(driver, url):
 def main():
     url = "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%B4%D9%87%D8%B1-%D9%82%D8%AF%D8%B3"
 
-    print("START")
+    print("=" * 50)
+    print("JOB SCRAPER v3.2")
+    print("=" * 50)
 
     driver = setup_driver()
 
     try:
         jobs = extract_all_jobs(driver, url)
 
-        print(f"Scraped: {len(jobs)} jobs")
+        if not jobs:
+            print("No jobs found")
+            return
 
-        # 🔥 AI SCORING (ONLY ONE SYSTEM)
-        jobs = score_jobs(jobs)
+        print(f"Extracted {len(jobs)} jobs")
 
-        results = []
+        # 🔥 IMPORTANT: scoring system (balanced version)
+        jobs = score_jobs(jobs, CORE_SKILLS, SECONDARY_SKILLS, NOISE_SKILLS)
+
+        print("\nScoring results:")
         for job in jobs:
-            results.append({
-                "title": job["title"],
-                "url": job["url"],
-                "score": job["score"],
-                "full_text": job["full_text"][:1000]
-            })
-
-            print(f"[{job['score']}] {job['title']}")
+            print(f"{job['score']}% -> {job['title']}")
 
         filename = f"job_matches_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
         with open(filename, "w", encoding="utf-8") as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
+            json.dump(jobs, f, ensure_ascii=False, indent=2)
 
-        print("Saved:", filename)
+        print("\nSaved:", filename)
 
     finally:
         driver.quit()
+        print("Browser closed")
 
 
 if __name__ == "__main__":
