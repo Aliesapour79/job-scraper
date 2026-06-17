@@ -12,11 +12,19 @@ model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
 # USER PROFILE (can be dynamic now)
 # ==========================================
 DEFAULT_PROFILE = """
-Python Embedded Systems ESP32 IoT
-Machine Learning PCB Electronics
-C++ Microcontroller AI Image Processing
-"""
+IoT, Embedded Systems, ESP32, Microcontrollers, Electronics, PCB Design, Circuit Design,
+Python, C++, Machine Learning, Artificial Intelligence, Computer Vision, Image Processing,
+Data Analysis, Signal Processing, Automation, Industrial Control Systems,
 
+Python programming, C++ programming, Linux system administration, Git version control,
+Networking (TCP/IP, DNS), Database (MySQL, SQLite, MongoDB),
+
+Internet of Things development, smart systems, hardware-software integration,
+
+برنامه نویسی پایتون، برنامه نویسی C++، اینترنت اشیاء، سیستم‌های نهفته، الکترونیک،
+طراحی مدار، میکروکنترلر، پردازش تصویر، هوش مصنوعی، یادگیری ماشین، تحلیل داده،
+اتوماسیون صنعتی، سیستم‌های کنترلی، لینوکس، شبکه، پایگاه داده، برنامه نویسی
+"""
 def get_user_vector(profile_text=DEFAULT_PROFILE):
     return model.encode(profile_text, convert_to_tensor=True, normalize_embeddings=True)
 
