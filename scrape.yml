@@ -4,7 +4,7 @@ on:
   schedule:
     # هر ۶ ساعت یکبار اجرا میشه (به وقت UTC)
     - cron: '0 */6 * * *'
-  
+  #test WorkFolw
   # این دکمه رو توی گیت‌هاب میذاره برای اجرای دستی
   workflow_dispatch:
 
