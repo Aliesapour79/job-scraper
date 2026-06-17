@@ -99,7 +99,7 @@ def setup_driver():
     # وب‌درایور منیجر به‌طور خودکار کروم‌درایور را دانلود و مدیریت می‌کند
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
-   
+   return driver
 # ==========================================
 # EXTRACT JOB DETAILS FROM PAGE
 # ==========================================
