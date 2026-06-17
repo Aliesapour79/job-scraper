@@ -1,15 +1,18 @@
 import re
 
+# basic Persian + English stop noise removal
+STOP_CHARS = r"[^\w\s\u0600-\u06FF]"
+
 def clean_text(text: str) -> str:
     if not text:
         return ""
 
     text = text.lower()
 
-    # حذف کاراکترهای اضافی
-    text = re.sub(r"[^\w\s\u0600-\u06FF]", " ", text)
+    # remove punctuation
+    text = re.sub(STOP_CHARS, " ", text)
 
-    # یکسان‌سازی فاصله‌ها
+    # normalize spaces
     text = re.sub(r"\s+", " ", text).strip()
 
     return text
