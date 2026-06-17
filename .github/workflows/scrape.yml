@@ -42,3 +42,50 @@ jobs:
           name: job-matches-json
           path: job_matches_*.json
           retention-days: 30
+      
+      - name: Send results to Telegram
+        if: success()
+        run: |
+          python -c '
+          import requests
+          import glob
+          import datetime
+          import os
+          TOKEN = "'"${{ secrets.TELEGRAM_BOT_TOKEN }}"'"
+          CHAT_ID = "'"${{ secrets.TELEGRAM_CHAT_ID }}"'"
+          if TOKEN != "" and CHAT_ID != "":
+              files = glob.glob("job_matches_*.json")
+              if files:
+                  for f in files:
+                      with open(f, "rb") as file:
+                          requests.post(
+                              f"https://api.telegram.org/bot{TOKEN}/sendDocument",
+                              data={"chat_id": CHAT_ID, "caption": f"✅ اسکرپینگ انجام شد! {datetime.datetime.now().strftime('%Y/%m/%d %H:%M')}"},
+                              files={"document": file}
+                          )
+                  print("✅ فایل به تلگرام ارسال شد.")
+              else:
+                  print("⚠️ هیچ فایلی پیدا نشد!")
+          else:
+              print("⚠️ توکن یا آیدی تلگرام تنظیم نشده است!")
+          '
+      
+      - name: Send error to Telegram
+        if: failure()
+        run: |
+          python -c '
+          import requests
+          import datetime
+          import os
+          TOKEN = "'"${{ secrets.TELEGRAM_BOT_TOKEN }}"'"
+          CHAT_ID = "'"${{ secrets.TELEGRAM_CHAT_ID }}"'"
+          if TOKEN != "" and CHAT_ID != "":
+              msg = f"❌ اسکرپینگ در تاریخ {datetime.datetime.now().strftime('%Y/%m/%d %H:%M')} با خطا مواجه شد!"
+              requests.post(
+                  f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+                  data={"chat_id": CHAT_ID, "text": msg}
+              )
+              print("✅ پیام خطا به تلگرام ارسال شد.")
+          else:
+              print("⚠️ توکن یا آیدی تلگرام تنظیم نشده است!")
+          '
