@@ -2,10 +2,7 @@ name: Job Scraper - Daily Run
 
 on:
   schedule:
-    # هر ۶ ساعت یکبار اجرا میشه (به وقت UTC)
     - cron: '0 */6 * * *'
-  #test WorkFolw
-  # این دکمه رو توی گیت‌هاب میذاره برای اجرای دستی
   workflow_dispatch:
 
 jobs:
@@ -14,11 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      # 1. دریافت کد از ریپازیتوری
       - name: Checkout code
         uses: actions/checkout@v4
       
-      # 2. نصب Chrome
       - name: Setup Chrome
         run: |
           sudo apt-get update
@@ -27,48 +22,36 @@ jobs:
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
           google-chrome --version
       
-      # 3. نصب ChromeDriver
-      - name: Setup ChromeDriver
-        run: |
-          wget -q https://storage.googleapis.com/chrome-for-testing-public/latest/linux64/chromedriver-linux64.zip
-          unzip chromedriver-linux64.zip
-          sudo mv chromedriver /usr/local/bin/
-          sudo chmod +x /usr/local/bin/chromedriver
-          chromedriver --version
-      
-      # 4. نصب Python
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
       
-      # 5. نصب کتابخانه‌ها
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
       
-      # 6. اجرای اسکریپت
       - name: Run scraper
-        id: scraper
-        continue-on-error: true
         run: |
           python job_scraper.py
       
-      # 7. ذخیره فایل JSON به عنوان Artifact (قابل دانلود)
       - name: Upload results
         uses: actions/upload-artifact@v3
         with:
-          name: job-matches
+          name: job-matches-json
           path: job_matches_*.json
           retention-days: 30
       
-      # 8. ارسال موفقیت به تلگرام
       - name: Send success to Telegram
-        if: success()
+        if: success() && secrets.TELEGRAM_BOT_TOKEN != ''
         run: |
           python -c "
-import requests, glob, os, json
+import requests
+import glob
+import os
+import json
+import datetime
 TOKEN = '${{ secrets.TELEGRAM_BOT_TOKEN }}'
 CHAT_ID = '${{ secrets.TELEGRAM_CHAT_ID }}'
 files = glob.glob('job_matches_*.json')
@@ -77,7 +60,7 @@ if files:
         with open(f, 'rb') as file:
             res = requests.post(
                 f'https://api.telegram.org/bot{TOKEN}/sendDocument',
-                data={'chat_id': CHAT_ID, 'caption': f'✅ اسکرپینگ انجام شد! تاریخ: $(date)'},
+                data={'chat_id': CHAT_ID, 'caption': f'✅ اسکرپینگ انجام شد! {datetime.datetime.now().strftime(\"%Y/%m/%d %H:%M\")}'},
                 files={'document': file}
             )
     print(f'✅ {len(files)} فایل به تلگرام ارسال شد.')
@@ -85,12 +68,12 @@ else:
     print('⚠️ هیچ فایلی پیدا نشد!')
 "
       
-      # 9. ارسال خطا به تلگرام (اگه شکست بخوره)
       - name: Send error to Telegram
-        if: failure()
+        if: failure() && secrets.TELEGRAM_BOT_TOKEN != ''
         run: |
           python -c "
-import requests, datetime
+import requests
+import datetime
 TOKEN = '${{ secrets.TELEGRAM_BOT_TOKEN }}'
 CHAT_ID = '${{ secrets.TELEGRAM_CHAT_ID }}'
 msg = f'❌ اسکرپینگ در تاریخ {datetime.datetime.now().strftime(\"%Y/%m/%d %H:%M\")} با خطا مواجه شد!'
