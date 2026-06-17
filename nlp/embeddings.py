@@ -1,17 +1,37 @@
 from sentence_transformers import SentenceTransformer, util
+from functools import lru_cache
+import torch
 
-model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+# ==========================================
+# MODEL (lazy + safe load)
+# ==========================================
+_device = "cuda" if torch.cuda.is_available() else "cpu"
 
-_embedding_cache = {}
+model = SentenceTransformer(
+    "paraphrase-multilingual-MiniLM-L12-v2",
+    device=_device
+)
 
-def encode(text):
-    if text in _embedding_cache:
-        return _embedding_cache[text]
+# ==========================================
+# ENCODING (cached + optimized)
+# ==========================================
+@lru_cache(maxsize=2000)
+def encode(text: str):
+    if not text:
+        return None
 
-    vec = model.encode(text, convert_to_tensor=True)
-    _embedding_cache[text] = vec
-    return vec
+    return model.encode(
+        text,
+        convert_to_tensor=True,
+        normalize_embeddings=True
+    )
 
 
+# ==========================================
+# COSINE SIMILARITY
+# ==========================================
 def cosine_similarity(a, b):
+    if a is None or b is None:
+        return 0.0
+
     return util.cos_sim(a, b).item()
