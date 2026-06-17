@@ -90,26 +90,16 @@ SKILLS_WEIGHT = {
 # ==========================================
 # SETUP DRIVER
 # ==========================================
+
 def setup_driver():
-    options = Options()
-    # Comment below line to see browser
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option('useAutomationExtension', False)
-    
-    
-    if platform.system() == 'Windows':
-        chrome_driver_path = r"C:\chromedriver\chromedriver.exe"
-    else:  # Linux (GitHub Actions)
-        chrome_driver_path = "/usr/local/bin/chromedriver"
-
-    service = Service(chrome_driver_path)
-    return webdriver.Chrome(service=service, options=options)
-
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    # وب‌درایور منیجر به‌طور خودکار کروم‌درایور را دانلود و مدیریت می‌کند
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+   
 # ==========================================
 # EXTRACT JOB DETAILS FROM PAGE
 # ==========================================
