@@ -1,6 +1,5 @@
 from sentence_transformers import SentenceTransformer, util
 import numpy as np
-from scipy.stats import norm
 from .text_cleaner import clean_text
 
 # ==========================================
@@ -9,34 +8,34 @@ from .text_cleaner import clean_text
 model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
 
 # ==========================================
-# USER PROFILE (can be dynamic now)
+# USER PROFILE (Balanced + Bilingual)
 # ==========================================
 DEFAULT_PROFILE = """
 IoT, Embedded Systems, ESP32, Microcontrollers, Electronics, PCB Design, Circuit Design,
 Python, C++, Machine Learning, Artificial Intelligence, Computer Vision, Image Processing,
 Data Analysis, Signal Processing, Automation, Industrial Control Systems,
-
-Python programming, C++ programming, Linux system administration, Git version control,
-Networking (TCP/IP, DNS), Database (MySQL, SQLite, MongoDB),
-
-Internet of Things development, smart systems, hardware-software integration,
+Linux, Networking, Git, Database (MySQL, SQLite, MongoDB),
 
 برنامه نویسی پایتون، برنامه نویسی C++، اینترنت اشیاء، سیستم‌های نهفته، الکترونیک،
 طراحی مدار، میکروکنترلر، پردازش تصویر، هوش مصنوعی، یادگیری ماشین، تحلیل داده،
-اتوماسیون صنعتی، سیستم‌های کنترلی، لینوکس، شبکه، پایگاه داده، برنامه نویسی
+اتوماسیون صنعتی، شبکه، پایگاه داده
 """
+
 def get_user_vector(profile_text=DEFAULT_PROFILE):
     return model.encode(profile_text, convert_to_tensor=True, normalize_embeddings=True)
 
 user_vec = get_user_vector()
 
 # ==========================================
-# ENCODING CACHE
+# CACHE
 # ==========================================
 _embedding_cache = {}
 
 def cached_encode(text):
     text = clean_text(text)
+
+    if not text:
+        return None
 
     if text in _embedding_cache:
         return _embedding_cache[text]
@@ -46,64 +45,80 @@ def cached_encode(text):
     return vec
 
 # ==========================================
-# SCORE: SEMANTIC
+# SEMANTIC SCORE
 # ==========================================
-def semantic_score(text, user_vec):
+def semantic_score(text):
     if not text:
         return 0
 
     job_vec = cached_encode(text)
-    return max(0, min(util.cos_sim(user_vec, job_vec).item() * 100, 100))
+    if job_vec is None:
+        return 0
+
+    score = util.cos_sim(user_vec, job_vec).item()
+    return max(0, min(score * 100, 100))
 
 # ==========================================
-# KEYWORD SCORE (FIXED SCALE)
+# KEYWORD SCORE (stable scaled)
 # ==========================================
 def keyword_score(text, core, secondary, noise):
     text = text.lower()
 
     score = 0
 
+    # CORE boost
     for kw in core:
         if kw in text:
-            score += 10
+            score += 12
 
+    # SECONDARY boost
     for kw in secondary:
         if kw in text:
-            score += 4
+            score += 5
 
+    # NOISE penalty
     for kw in noise:
         if kw in text:
-            score -= 15
+            score -= 20
 
-    # normalize (IMPORTANT FIX)
-    return np.tanh(score / 50) * 100
+    # stable scaling
+    return np.tanh(score / 40) * 100
 
 # ==========================================
-# HYBRID SCORE (BALANCED)
+# HYBRID SCORE (balanced)
 # ==========================================
-def hybrid_score(text, user_vec, core, secondary, noise):
-    sem = semantic_score(text, user_vec)
+def hybrid_score(text, core, secondary, noise):
+    sem = semantic_score(text)
     kw = keyword_score(text, core, secondary, noise)
 
-    return (0.75 * sem) + (0.25 * kw)
+    # balanced fusion
+    return (0.65 * sem) + (0.35 * kw)
 
 # ==========================================
-# NORMALIZATION
+# NORMALIZATION (SAFE VERSION)
 # ==========================================
-def z_normalize(scores):
-    mean = np.mean(scores)
-    std = np.std(scores)
+def minmax_normalize(scores):
+    if not scores:
+        return []
 
-    if std == 0:
+    min_s = min(scores)
+    max_s = max(scores)
+
+    if max_s == min_s:
         return [50 for _ in scores]
 
-    z = [(x - mean) / std for x in scores]
-    return [round(norm.cdf(v) * 100, 2) for v in z]
+    return [
+        ((s - min_s) / (max_s - min_s)) * 100
+        for s in scores
+    ]
 
 # ==========================================
-# MAIN
+# MAIN SCORER
 # ==========================================
 def score_jobs(jobs, core_skills=None, secondary_skills=None, noise_skills=None):
+
+    if not jobs:
+        return []
 
     core_skills = core_skills or []
     secondary_skills = secondary_skills or []
@@ -115,15 +130,20 @@ def score_jobs(jobs, core_skills=None, secondary_skills=None, noise_skills=None)
 
     raw_scores = []
 
+    # STEP 1: RAW SCORES
     for job in jobs:
         text = job.get("full_text", "")
-        score = hybrid_score(text, user_vec, core, secondary, noise)
+
+        score = hybrid_score(text, core, secondary, noise)
         raw_scores.append(score)
 
-    normalized = z_normalize(raw_scores)
+    # STEP 2: NORMALIZE (SAFE)
+    normalized = minmax_normalize(raw_scores)
 
+    # STEP 3: APPLY SCORES
     for i, job in enumerate(jobs):
-        job["score"] = normalized[i]
+        job["score"] = round(normalized[i], 2)
         job["debug_raw_score"] = round(raw_scores[i], 2)
 
+    # STEP 4: SORT
     return sorted(jobs, key=lambda x: x["score"], reverse=True)
