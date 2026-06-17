@@ -281,85 +281,72 @@ def calculate_match_score(text):
 # ==========================================
 def main():
     url = "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%B4%D9%87%D8%B1-%D9%82%D8%AF%D8%B3"
-    
+
     print("=" * 60)
     print("🔍 Scraping Job Postings - Ghods City")
     print("=" * 60)
-    
+
     driver = setup_driver()
+
     try:
         print("🌐 Connecting to website...")
-        
-        # Extract jobs
-        jobs = score_jobs(jobs)
-        
+
+        # ==========================================
+        # 1. SCRAPE JOBS
+        # ==========================================
+        jobs = extract_all_jobs(driver, url)
+
         if not jobs:
             print("❌ No jobs found!")
             return
-        
-        print(f"\n✅ Extracted {len(jobs)} jobs successfully!")
-        print("🔄 Calculating match scores...\n")
-        
-        # Calculate scores
+
+        print(f"✅ Extracted {len(jobs)} jobs")
+
+        # ==========================================
+        # 2. AI SCORING (NEW VERSION)
+        # ==========================================
+        jobs = score_jobs(jobs)
+
+        print("🔄 Jobs scored successfully...\n")
+
+        # ==========================================
+        # 3. SAVE RESULTS (NOW SAFE)
+        # ==========================================
         results = []
+
         for job in jobs:
-            score, matched = calculate_match_score(job["full_text"])
-            
-            if score > 0:
-                results.append({
-                    "title": job["title"],
-                    "company": job["company"],
-                    "url": job["url"],
-                    "score": score,
-                    "matched_skills": matched,
-                    "description": job["description"],
-                    "full_text": job["full_text"][:1000] + "..." if len(job["full_text"]) > 1000 else job["full_text"]
-                })
-                print(f"  ✅ [{score}%] {job['title']} - {job['company']}")
-                print(f"     Skills: {', '.join(matched)}")
-            else:
-                # Show a preview of the text for debugging
-                preview = job["full_text"][:300].replace('\n', ' ')
-                print(f"  ⚠️ [0%] {job['title']} - {job['company']}")
-                print(f"     Preview: {preview}...")
-        
-        # Sort by score
+            results.append({
+                "title": job["title"],
+                "company": job["company"],
+                "url": job["url"],
+                "score": job["score"],
+                "description": job["description"],
+                "full_text": job["full_text"][:1000]
+            })
+
+            print(f"  ✅ [{job['score']}%] {job['title']}")
+
+        # sort (optional, already sorted)
         results.sort(key=lambda x: x["score"], reverse=True)
-        
-        # Save results
+
+        # save json
         filename = f"job_matches_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
-        
-        # Show summary
+
         print("\n" + "=" * 60)
-        print(f"📁 Results saved to: {filename}")
-        print(f"🎯 Found {len(results)} relevant jobs out of {len(jobs)} total")
+        print(f"📁 Saved: {filename}")
+        print(f"🎯 Total: {len(results)} jobs")
         print("=" * 60)
-        
-        if results:
-            print("\n🏆 Top 5 Matching Jobs:\n")
-            for i, job in enumerate(results[:5], 1):
-                print(f"{i}. [{job['score']}%] {job['title']}")
-                print(f"   Company: {job['company']}")
-                print(f"   URL: {job['url']}")
-                print(f"   Skills: {', '.join(job['matched_skills'][:5])}")
-                print()
-        else:
-            print("\n❌ No matching jobs found!")
-            print("\n💡 Debugging tips:")
-            print("   1. Check if job descriptions are being extracted correctly")
-            print("   2. Try removing '--headless' to see the browser")
-            print("   3. Look at the console output for text previews")
-            
+
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
         traceback.print_exc()
-        
+
     finally:
         driver.quit()
         print("\n✅ Browser closed.")
-
 if __name__ == "__main__":
     main()
