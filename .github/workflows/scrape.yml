@@ -37,7 +37,7 @@ jobs:
           python job_scraper.py
       
       - name: Upload results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: job-matches-json
           path: job_matches_*.json
