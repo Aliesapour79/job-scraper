@@ -135,31 +135,28 @@ class SemanticMatcher:
 
 def combine_scores(keyword_score, tfidf_score, embedding_score):
     """
-    ترکیب سه امتیاز با وزن‌های مختلف
+    ترکیب امتیازها با وزن‌های جدید
     
-    Args:
-        keyword_score: امتیاز کلمه‌کلیدی (0-100)
-        tfidf_score: امتیاز TF-IDF (0-100)
-        embedding_score: امتیاز Embedding (0-100)
-    
-    Returns:
-        int: امتیاز نهایی (0-100)
+    Note: keyword_score دیگر استفاده نمیشه (double counting)
+    فقط از tfidf و embedding استفاده میشه
     """
-    # وزن‌ها را می‌توانید تنظیم کنید
-    weights = {
-        'keyword': 0.30,    # 40%
-        'tfidf': 0.30,      # 30%
-        'embedding': 0.40   # 30%
-    }
+    try:
+        from config import SCORE_WEIGHTS
+        weights = SCORE_WEIGHTS
+    except:
+        weights = {
+            'keyword': 0.0,
+            'tfidf': 0.30,
+            'embedding': 0.70
+        }
     
+    # فقط از TF-IDF و Embedding استفاده کن (Keyword حذف شده)
     final_score = (
-        (keyword_score * weights['keyword']) +
         (tfidf_score * weights['tfidf']) +
         (embedding_score * weights['embedding'])
     )
     
     return int(min(100, final_score))
-
 # ==========================================
 # تست
 # ==========================================
