@@ -16,7 +16,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 import warnings
 from webdriver_manager.chrome import ChromeDriverManager
 
-
 # ==========================================
 # توابع جدید: Penalty, Boost, Normalization
 # ==========================================
@@ -30,7 +29,7 @@ def generic_penalty(job_text):
     """
     job_text_lower = job_text.lower()
     count = sum(1 for w in GENERIC_KEYWORDS if w.lower() in job_text_lower)
-    penalty = min(0.20, count * 0.05)  # حداکثر ۲۰٪
+    penalty = min(0.20, count * 0.05)
     return penalty
 
 def domain_boost(job_text, resume_text):
@@ -47,7 +46,7 @@ def domain_boost(job_text, resume_text):
         if keyword_lower in job_text_lower and keyword_lower in resume_text_lower:
             matches += 1
     
-    boost = min(0.20, matches * 0.05)  # حداکثر ۲۰٪
+    boost = min(0.20, matches * 0.05)
     return boost
 
 def min_max_normalize(scores):
@@ -66,18 +65,22 @@ def min_max_normalize(scores):
     
     return [(x - min_val) / (max_val - min_val) for x in scores]
 
-def calculate_final_score(job_text, resume_text, embedding_score, tfidf_score):
+def calculate_final_score(idx, job_text, resume_text, embedding_score, tfidf_score, all_embedding_scores, all_tfidf_scores):
     """
     محاسبه امتیاز نهایی با فرمول جدید:
-    1. نرمال‌سازی Embedding و TF-IDF
+    1. نرمال‌سازی Min-Max روی کل dataset
     2. ترکیب با وزن‌ها
-    3. اعمال جریمه و پاداش
+    3. اعمال جریمه و پاداش (multiplicative)
     """
     from config import SCORE_WEIGHTS
     
-    # نرمال‌سازی امتیازها (با فرض اینکه هر دو در بازه ۰-۱۰۰ هستن)
-    norm_embedding = embedding_score / 100.0
-    norm_tfidf = tfidf_score / 100.0
+    # نرمال‌سازی Min-Max روی کل dataset
+    norm_embeddings = min_max_normalize(all_embedding_scores)
+    norm_tfidfs = min_max_normalize(all_tfidf_scores)
+    
+    # گرفتن مقدار نرمال شده برای این آگهی
+    norm_embedding = norm_embeddings[idx] if idx < len(norm_embeddings) else 0.5
+    norm_tfidf = norm_tfidfs[idx] if idx < len(norm_tfidfs) else 0.5
     
     # ترکیب با وزن‌ها
     base_score = (
@@ -85,13 +88,13 @@ def calculate_final_score(job_text, resume_text, embedding_score, tfidf_score):
         norm_tfidf * SCORE_WEIGHTS['tfidf']
     )
     
-    # اعمال جریمه و پاداش
+    # اعمال جریمه و پاداش (multiplicative)
     penalty = generic_penalty(job_text)
     boost = domain_boost(job_text, resume_text)
     
-    final_score = base_score * (1 - penalty) * (1 + boost)
+    # ✅ فرمول multiplicative
+    final_score = base_score * (1 + boost - penalty)
     
-    # تبدیل به درصد و محدود کردن به ۰-۱۰۰
     return int(min(100, max(0, final_score * 100)))
 warnings.filterwarnings('ignore')
 
