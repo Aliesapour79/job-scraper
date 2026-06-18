@@ -13,8 +13,8 @@ def main():
     url = "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%B4%D9%87%D8%B1-%D9%82%D8%AF%D8%B3"
     
     print("=" * 80)
-    print("🚀 JOB MATCHER v4.0 - WITH SEMANTIC EMBEDDING")
-    print("   (Keyword + TF-IDF + Semantic Embedding)")
+    print("🚀 JOB MATCHER v5.0 - WITH ADVANCED SCORING")
+    print("   (TF-IDF + Semantic Embedding + Penalty/Boost)")
     print("=" * 80)
     
     # ==========================================
@@ -65,10 +65,10 @@ def main():
             embedding_scores = [0] * len(jobs)
         
         # ==========================================
-        # محاسبه امتیازات برای هر شغل
+        # محاسبه امتیازات برای هر شغل (NEW)
         # ==========================================
         for idx, job in enumerate(jobs):
-            # Keyword Score (از کد قبلی)
+            # Keyword Score (برای نمایش در گزارش - دیگر در امتیاز نهایی استفاده نمیشه)
             keyword_score, matched_keywords, group_results = calculate_keyword_score(
                 job['sections'].get('full_text', ''),
                 job['sections'].get('requirements', ''),
@@ -76,7 +76,7 @@ def main():
                 job['sections'].get('title', '') or job['title']
             )
             
-            # TF-IDF Score (از کد قبلی)
+            # TF-IDF Score
             combined_job_text = f"""
             {job['sections'].get('title', '')}
             {job['sections'].get('description', '')}
@@ -84,25 +84,43 @@ def main():
             """
             tfidf_score = semantic_match_score(combined_job_text, RESUME_TEXT, matched_keywords)
             
-            # Embedding Score (جدید)
+            # Embedding Score
             embedding_score = embedding_scores[idx] if idx < len(embedding_scores) else 0
             
-            # ترکیب امتیازها
-            final_score = combine_scores(keyword_score, tfidf_score, embedding_score)
+            # ==========================================
+            # ✅ فرمول جدید با جریمه و پاداش
+            # ==========================================
+            from job_matcher_core import calculate_final_score
+            
+            final_score = calculate_final_score(
+                job_text=combined_job_text,
+                resume_text=RESUME_TEXT,
+                embedding_score=embedding_score,
+                tfidf_score=tfidf_score
+            )
+            # ==========================================
+            
             all_scores.append(final_score)
             
-            # لاگ دیباگ
-            print(f"  📊 Job {idx+1}: Keyword={keyword_score}% | TF-IDF={tfidf_score:.1f}% | Embedding={embedding_score:.1f}% | Final={final_score}%")
+            # لاگ دیباگ با نمایش جریمه و پاداش
+            from job_matcher_core import generic_penalty, domain_boost
+            penalty = generic_penalty(combined_job_text)
+            boost = domain_boost(combined_job_text, RESUME_TEXT)
+            
+            print(f"  📊 Job {idx+1}: Embedding={embedding_score:.1f}% | TF-IDF={tfidf_score:.1f}% | "
+                  f"Penalty={penalty*100:.0f}% | Boost={boost*100:.0f}% | Final={final_score}%")
             
             # ذخیره موقت برای outlier
             results.append({
                 "title": job['title'],
                 "company": job['company'],
                 "url": job['url'],
-                "keyword_score": keyword_score,
+                "keyword_score": keyword_score,           # فقط برای نمایش
                 "tfidf_score": int(tfidf_score),
                 "embedding_score": int(embedding_score),
-                "score": final_score,
+                "score": final_score,                     # امتیاز نهایی با فرمول جدید
+                "penalty": int(penalty * 100),            # ذخیره جریمه برای دیباگ
+                "boost": int(boost * 100),                # ذخیره پاداش برای دیباگ
                 "matched_skills": matched_keywords,
                 "group_analysis": group_results,
                 "description_preview": job['sections'].get('description', '')[:300],
@@ -110,24 +128,24 @@ def main():
             })
         
         # ==========================================
-        # محاسبه Outlier Score
+        # محاسبه Outlier Score (با CDF اصلاح شده)
         # ==========================================
         for result in results:
             result['outlier_score'] = calculate_outlier_score(all_scores, result['score'])
         
         # فیلتر بر اساس امتیاز
-        min_score = FILTERS.get('min_score', 30)
+        min_score = FILTERS.get('min_score', 20)
         filtered_results = [r for r in results if r['score'] >= min_score]
         filtered_results.sort(key=lambda x: x['score'], reverse=True)
         
         # ==========================================
         # ذخیره نتایج
         # ==========================================
-        json_filename = f"output/job_matches_v4_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        json_filename = f"output/job_matches_v5_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(json_filename, "w", encoding="utf-8") as f:
             json.dump(filtered_results, f, ensure_ascii=False, indent=2)
         
-        html_filename = f"output/job_report_v4_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        html_filename = f"output/job_report_v5_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
         generate_html_report(filtered_results, html_filename)
         
         # ==========================================
@@ -144,7 +162,9 @@ def main():
             for i, job in enumerate(filtered_results[:5], 1):
                 print(f"{i}. [{job['score']}%] {job['title']}")
                 print(f"   🏢 {job['company']}")
-                print(f"   📊 Keyword: {job['keyword_score']}% | TF-IDF: {job['tfidf_score']}% | Embedding: {job['embedding_score']}%")
+                print(f"   📊 Embedding: {job['embedding_score']}% | TF-IDF: {job['tfidf_score']}%")
+                if 'penalty' in job and job['penalty'] > 0:
+                    print(f"   ⚠️  Penalty: -{job['penalty']}% | Boost: +{job.get('boost', 0)}%")
                 print(f"   📊 Outlier: {job['outlier_score']}%")
                 print(f"   🛠️  Skills: {', '.join(job['matched_skills'][:5])}")
                 print()
