@@ -1,5 +1,5 @@
 """
-تنظیمات کلی پروژه
+تنظیمات کلی پروژه - v6.0 Multi-Intent Scoring
 """
 
 # ==========================================
@@ -28,14 +28,36 @@ GENERIC_KEYWORDS = [
 ]
 
 # ==========================================
-# کلمات تخصصی برای پاداش (Boost)
+# کلمات تخصصی با mapping فارسی/انگلیسی (برای Boost)
 # ==========================================
-TECH_KEYWORDS = [
-    "AI", "Python", "Vision", "IoT", "PCB", 
-    "ESP32", "MQTT", "Arduino", "Raspberry", "OpenCV",
-    "YOLO", "CNN", "TensorFlow", "PyTorch", "Machine Learning",
-    "Deep Learning", "Computer Vision", "پردازش تصویر", "هوش مصنوعی"
+TECH_KEYWORDS_MAP = {
+    "ai": ["ai", "هوش مصنوعی", "machine learning", "یادگیری ماشین"],
+    "computer_vision": ["computer vision", "opencv", "پردازش تصویر", "بینایی ماشین"],
+    "deep_learning": ["deep learning", "cnn", "yolo", "tensorflow", "pytorch"],
+    "iot": ["iot", "اینترنت اشیاء", "esp32", "mqtt", "arduino", "raspberry"],
+    "electronics": ["electronics", "pcb", "altium", "الکترونیک", "میکروکنترلر"],
+    "programming": ["python", "c++", "جاوا", "برنامه‌نویسی", "backend", "api"],
+    "network": ["network", "شبکه", "tcp/ip", "dns", "linux", "سرور"],
+    "data": ["data", "تحلیل داده", "sql", "mysql", "mongodb", "pandas", "numpy"]
+}
+
+# ==========================================
+# کلمات اداری برای General Score
+# ==========================================
+ADMIN_KEYWORDS = [
+    "word", "excel", "powerpoint", "outlook", "آفیس",
+    "اداری", "کارمند", "منشی", "دفتر", "مکاتبات", 
+    "بایگانی", "نامه‌نگاری", "دبیرخانه", "امور اداری",
+    "پشتیبانی", "حضور و غیاب", "مدیریت زمان", "گزارش‌نویسی"
 ]
+
+# ==========================================
+# وزن‌های Multi-Intent
+# ==========================================
+INTENT_WEIGHTS = {
+    'technical': 0.70,   # وزن حوزه تخصصی
+    'general': 0.30      # وزن حوزه عمومی
+}
 
 # ==========================================
 # تنظیمات Scraping
@@ -63,33 +85,3 @@ FILTERS = {
 # تنظیمات خروجی
 # ==========================================
 OUTPUT_DIR = "output"  # پوشه خروجی
-# ==========================================
-# کلمات تخصصی با mapping فارسی/انگلیسی
-# ==========================================
-TECH_KEYWORDS_MAP = {
-    "ai": ["ai", "هوش مصنوعی", "machine learning", "یادگیری ماشین"],
-    "computer_vision": ["computer vision", "opencv", "پردازش تصویر", "بینایی ماشین"],
-    "deep_learning": ["deep learning", "cnn", "yolo", "tensorflow", "pytorch"],
-    "iot": ["iot", "اینترنت اشیاء", "esp32", "mqtt", "arduino", "raspberry"],
-    "electronics": ["electronics", "pcb", "altium", "الکترونیک", "میکروکنترلر"],
-    "programming": ["python", "c++", "جاوا", "برنامه‌نویسی", "backend", "api"],
-    "network": ["network", "شبکه", "tcp/ip", "dns", "linux", "سرور"],
-    "data": ["data", "تحلیل داده", "sql", "mysql", "mongodb", "pandas", "numpy"]
-}
-
-# ==========================================
-# کلمات اداری برای General Score
-# ==========================================
-ADMIN_KEYWORDS = [
-    "word", "excel", "powerpoint", "outlook", "آفیس",
-    "اداری", "کارمند", "منشی", "دفتر", "مکاتبات", 
-    "بایگانی", "نامه‌نگاری", "دبیرخانه", "امور اداری"
-]
-
-# ==========================================
-# وزن‌های Multi-Intent
-# ==========================================
-INTENT_WEIGHTS = {
-    'technical': 0.70,   # وزن حوزه تخصصی
-    'general': 0.30      # وزن حوزه عمومی
-}
