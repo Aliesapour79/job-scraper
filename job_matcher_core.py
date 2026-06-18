@@ -18,23 +18,55 @@ from webdriver_manager.chrome import ChromeDriverManager
 warnings.filterwarnings('ignore')
 
 # ==========================================
-# YOUR RESUME TEXT
+# YOUR RESUME TEXT (UPDATED)
 # ==========================================
 RESUME_TEXT = """
 علی عیسی پور شربیانی
 برنامه‌نویس با تمرکز بر پیاده‌سازی پروژه‌های مبتنی بر هوش مصنوعی و IoT
-مهارت‌ها: پردازش تصویر، الگوریتم، اینترنت اشیاء، الکترونیک، طراحی مدار، تحلیل داده، 
-Machine Learning، پردازش داده‌ها، Python، C++، هوش مصنوعی، MySQL، SQLite، MongoDB، 
-مدیریت زمان، Linux، Git، شبکه، TCP/IP، DNS
-پروژه‌ها: تشخیص اجزای ماشین با هوش مصنوعی، تشخیص نوع زیتون با Web Application، 
-تشخیص نوع برگ و بیماری گیاهان با یادگیری عمیق، سیستم حضور غیاب با اثر انگشت، 
-مدیریت ورود و خروج خودرو به پارکینگ با QR و ESP32
-تحصیلات: کارشناسی مهندسی تکنولوژی نرم‌افزار با معدل ۱۷.۴
-سوابق: برنامه‌نویس در آیسان (پروژه‌های AI و IoT)، مدیر IT در دفتر خدمات الکترونیک قضایی
+
+مهارت‌های فنی:
+- برنامه‌نویسی: Python, C++, JavaScript
+- هوش مصنوعی: Machine Learning, Deep Learning, Computer Vision
+- پردازش تصویر: OpenCV, YOLO, CNN
+- اینترنت اشیاء: ESP32, MQTT, Arduino, Raspberry Pi
+- الکترونیک: طراحی مدار, PCB, Altium, میکروکنترلر
+- تحلیل داده: Pandas, NumPy, MySQL, SQLite, MongoDB
+- شبکه: TCP/IP, DNS, Linux, Git
+
+مهارت‌های اداری:
+- تسلط کامل بر Word, Excel, PowerPoint, Outlook
+- مدیریت دفتر و مکاتبات اداری
+- گزارش‌نویسی و مستندسازی
+- مدیریت زمان و اولویت‌بندی وظایف
+- هماهنگی و پیگیری امور اداری
+- مدیریت پروژه‌های گروهی
+- ارتباط موثر با تیم‌های مختلف
+
+سوابق کاری:
+- برنامه‌نویس در آیسان (پروژه‌های AI و IoT) - ۱۲/۱۴۰۲ تا ۰۴/۱۴۰۴
+- مدیر IT در دفتر خدمات الکترونیک قضایی - ۰۳/۱۳۹۹ تا ۰۶/۱۴۰۰
+
+تحصیلات:
+- کارشناسی مهندسی تکنولوژی نرم‌افزار (معدل ۱۷.۴) - دانشگاه گنبد کاووس
+- کاردانی فناوری اطلاعات (معدل ۱۶.۹۹) - دانشکده شهید شمسی‌پور
+
+پروژه‌ها:
+1. مدیریت ورود و خروج خودرو به پارکینگ با QR (ESP32 + Database)
+2. سیستم حضور غیاب با اثر انگشت
+3. تشخیص اجزای ماشین با هوش مصنوعی
+4. طبقه‌بندی اعداد فارسی با بینایی کامپیوتر
+5. تشخیص نوع زیتون با Web Application
+6. تشخیص بیماری گیاهان با یادگیری عمیق
+
+دستاوردها:
+- معدل عالی در مقطع کاردانی و کارشناسی
+- دبیر انجمن علمی کامپیوتر دانشگاه گنبد کاووس
+- دستیار آموزشی (TA) در دانشگاه
+- شخصیت تحلیلی و هدف‌گرا (ENTJ-A)
 """
 
 # ==========================================
-# SKILL GROUPS
+# SKILL GROUPS (UPDATED)
 # ==========================================
 SKILL_GROUPS = {
     "iot_embedded": {
@@ -87,17 +119,30 @@ SKILL_GROUPS = {
         "bonus_per_match": 1,
         "min_matches_for_bonus": 2
     },
+    "office_administration": {
+        "keywords": [
+            "اداری", "منشی", "دفتر", "پشتیبانی", "حضور و غیاب", "مدیریت زمان",
+            "word", "excel", "powerpoint", "outlook", "آفیس", "مکاتبات",
+            "بایگانی", "نامه‌نگاری", "مدارک", "هماهنگی", "گزارش‌نویسی",
+            "دبیرخانه", "مدیریت اسناد", "تنظیم قرارداد", "پیگیری",
+            "کارمند", "کارمندی", "پذیرش", "دفترداری", "امور اداری"
+        ],
+        "base_weight": 8,
+        "bonus_per_match": 1.5,
+        "min_matches_for_bonus": 3
+    },
     "general": {
         "keywords": ["word", "excel", "مدیریت زمان", "الگوریتم", "git", 
-                     "مستندسازی", "تیم‌ورزی", "ارتباط موثر", "مدیریت پروژه"],
-        "base_weight": 3,
-        "bonus_per_match": 0.5,
+                     "مستندسازی", "تیم‌ورزی", "ارتباط موثر", "مدیریت پروژه",
+                     "تحلیل", "گزارش", "مکاتبه", "پشتیبانی"],
+        "base_weight": 4,
+        "bonus_per_match": 0.8,
         "min_matches_for_bonus": 4
     }
 }
 
 # ==========================================
-# JOB TITLE KEYWORDS FOR DYNAMIC WEIGHT
+# JOB TITLE KEYWORDS FOR DYNAMIC WEIGHT (UPDATED)
 # ==========================================
 JOB_TITLE_WEIGHT_MAP = {
     "iot": ["iot_embedded", "hardware_electronics", "industrial_automation"],
@@ -118,7 +163,18 @@ JOB_TITLE_WEIGHT_MAP = {
     "network": ["networking_sysadmin", "iot_embedded", "general"],
     "الکترونیک": ["hardware_electronics", "iot_embedded", "industrial_automation"],
     "رباتیک": ["industrial_automation", "hardware_electronics", "ai_computer_vision"],
-    "اتوماسیون": ["industrial_automation", "iot_embedded", "hardware_electronics"]
+    "اتوماسیون": ["industrial_automation", "iot_embedded", "hardware_electronics"],
+    # ========== گروه‌های اداری ==========
+    "اداری": ["office_administration", "general"],
+    "منشی": ["office_administration", "general"],
+    "کارمند": ["office_administration", "general"],
+    "پشتیبانی": ["office_administration", "general"],
+    "مکاتبات": ["office_administration", "general"],
+    "گزارش‌نویسی": ["office_administration", "general", "data_analytics"],
+    "دفتر": ["office_administration", "general"],
+    "پذیرش": ["office_administration", "general"],
+    "امور اداری": ["office_administration", "general"],
+    "کارمندی": ["office_administration", "general"]
 }
 
 # ==========================================
@@ -235,25 +291,12 @@ def semantic_match_score(job_text, resume_text, skill_keywords):
     if not job_text or not resume_text:
         return 0
     
-    # تمیز کردن متن‌ها
+    enhanced_resume = resume_text + " " + " ".join(skill_keywords * 2)
     job_text_clean = re.sub(r'[^\w\s\u0600-\u06FF]', ' ', job_text).lower()
-    resume_clean = re.sub(r'[^\w\s\u0600-\u06FF]', ' ', resume_text).lower()
-    
-    # ترکیب با کلمات کلیدی برای افزایش وزن
-    if skill_keywords:
-        enhanced_resume = resume_clean + " " + " ".join(skill_keywords[:10])
-    else:
-        enhanced_resume = resume_clean
+    resume_clean = re.sub(r'[^\w\s\u0600-\u06FF]', ' ', enhanced_resume).lower()
     
     try:
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        from sklearn.metrics.pairwise import cosine_similarity
-        
-        # حداقل طول متن
-        if len(job_text_clean.split()) < 2 or len(enhanced_resume.split()) < 2:
-            return 0
-        
-        corpus = [job_text_clean, enhanced_resume]
+        corpus = [job_text_clean, resume_clean]
         vectorizer = TfidfVectorizer(
             max_features=500,
             stop_words=None,
@@ -262,40 +305,19 @@ def semantic_match_score(job_text, resume_text, skill_keywords):
         )
         
         tfidf_matrix = vectorizer.fit_transform(corpus)
-        
-        # بررسی اینکه آیا ماتریس خالی نیست
-        if tfidf_matrix.shape[0] < 2 or tfidf_matrix.nnz == 0:
-            return 0
-            
         similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])
-        return float(similarity[0][0] * 100)
+        
+        return similarity[0][0] * 100
         
     except Exception as e:
         print(f"  ⚠️ TF-IDF Error: {e}")
         return 0
 
 def calculate_outlier_score(scores_list, current_score):
-    """محاسبه‌ی امتیاز outlier با استفاده از روش percentile برای تعداد کم"""
-    if not scores_list or len(scores_list) < 2:
+    """محاسبه‌ی امتیاز outlier با استفاده از Z-Score"""
+    if len(scores_list) < 3:
         return 50
     
-    if len(scores_list) < 5:
-        # برای تعداد کم، از روش percentile استفاده کن
-        sorted_scores = sorted(scores_list)
-        try:
-            # پیدا کردن رتبه
-            rank = 0
-            for i, s in enumerate(sorted_scores):
-                if s >= current_score:
-                    rank = i
-                    break
-            # تبدیل رتبه به درصد
-            percentile = (rank / (len(sorted_scores) - 1)) * 100 if len(sorted_scores) > 1 else 50
-            return int(percentile)
-        except:
-            return 50
-    
-    # روش Z-Score برای تعداد بیشتر
     mean = np.mean(scores_list)
     std = np.std(scores_list)
     
@@ -305,7 +327,8 @@ def calculate_outlier_score(scores_list, current_score):
     z_score = (current_score - mean) / std
     percentile = 50 + (z_score * 34)
     
-    return int(max(0, min(100, percentile)))
+    return max(0, min(100, percentile))
+
 # ==========================================
 # CALCULATE KEYWORD SCORE
 # ==========================================
