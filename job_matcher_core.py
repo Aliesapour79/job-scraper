@@ -275,10 +275,27 @@ def semantic_match_score(job_text, resume_text, skill_keywords):
         return 0
 
 def calculate_outlier_score(scores_list, current_score):
-    """محاسبه‌ی امتیاز outlier با استفاده از Z-Score"""
-    if len(scores_list) < 3:
+    """محاسبه‌ی امتیاز outlier با استفاده از روش percentile برای تعداد کم"""
+    if not scores_list or len(scores_list) < 2:
         return 50
     
+    if len(scores_list) < 5:
+        # برای تعداد کم، از روش percentile استفاده کن
+        sorted_scores = sorted(scores_list)
+        try:
+            # پیدا کردن رتبه
+            rank = 0
+            for i, s in enumerate(sorted_scores):
+                if s >= current_score:
+                    rank = i
+                    break
+            # تبدیل رتبه به درصد
+            percentile = (rank / (len(sorted_scores) - 1)) * 100 if len(sorted_scores) > 1 else 50
+            return int(percentile)
+        except:
+            return 50
+    
+    # روش Z-Score برای تعداد بیشتر
     mean = np.mean(scores_list)
     std = np.std(scores_list)
     
@@ -288,8 +305,7 @@ def calculate_outlier_score(scores_list, current_score):
     z_score = (current_score - mean) / std
     percentile = 50 + (z_score * 34)
     
-    return max(0, min(100, percentile))
-
+    return int(max(0, min(100, percentile)))
 # ==========================================
 # CALCULATE KEYWORD SCORE
 # ==========================================
