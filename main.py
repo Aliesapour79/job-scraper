@@ -1,11 +1,15 @@
 import json
 from datetime import datetime
+import os
 from job_matcher_core import *
 from html_generator import generate_html_report
 from semantic_matcher import SemanticMatcher, combine_scores
 from config import SCORE_WEIGHTS, EMBEDDING_MODEL, FILTERS
 
 def main():
+    # ایجاد پوشه خروجی
+    os.makedirs("output", exist_ok=True)
+    
     url = "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%B4%D9%87%D8%B1-%D9%82%D8%AF%D8%B3"
     
     print("=" * 80)
@@ -87,6 +91,9 @@ def main():
             final_score = combine_scores(keyword_score, tfidf_score, embedding_score)
             all_scores.append(final_score)
             
+            # لاگ دیباگ
+            print(f"  📊 Job {idx+1}: Keyword={keyword_score}% | TF-IDF={tfidf_score:.1f}% | Embedding={embedding_score:.1f}% | Final={final_score}%")
+            
             # ذخیره موقت برای outlier
             results.append({
                 "title": job['title'],
@@ -116,11 +123,11 @@ def main():
         # ==========================================
         # ذخیره نتایج
         # ==========================================
-        json_filename = f"job_matches_v4_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        json_filename = f"output/job_matches_v4_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(json_filename, "w", encoding="utf-8") as f:
             json.dump(filtered_results, f, ensure_ascii=False, indent=2)
         
-        html_filename = f"job_report_v4_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        html_filename = f"output/job_report_v4_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
         generate_html_report(filtered_results, html_filename)
         
         # ==========================================
