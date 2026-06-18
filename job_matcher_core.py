@@ -20,7 +20,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 # توابع جدید: Penalty, Boost, Normalization
 # ==========================================
 
-from config import GENERIC_KEYWORDS, TECH_KEYWORDS
+from config import GENERIC_KEYWORDS, TECH_KEYWORDS_MAP
 
 def generic_penalty(job_text):
     """
