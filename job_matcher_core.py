@@ -15,6 +15,84 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import warnings
 from webdriver_manager.chrome import ChromeDriverManager
+
+
+# ==========================================
+# توابع جدید: Penalty, Boost, Normalization
+# ==========================================
+
+from config import GENERIC_KEYWORDS, TECH_KEYWORDS
+
+def generic_penalty(job_text):
+    """
+    محاسبه جریمه برای آگهی‌های عمومی
+    هر کلمه عمومی ۵٪ جریمه، حداکثر ۲۰٪
+    """
+    job_text_lower = job_text.lower()
+    count = sum(1 for w in GENERIC_KEYWORDS if w.lower() in job_text_lower)
+    penalty = min(0.20, count * 0.05)  # حداکثر ۲۰٪
+    return penalty
+
+def domain_boost(job_text, resume_text):
+    """
+    محاسبه پاداش برای آگهی‌های تخصصی
+    هر کلمه تخصصی ۵٪ پاداش، حداکثر ۲۰٪
+    """
+    job_text_lower = job_text.lower()
+    resume_text_lower = resume_text.lower()
+    
+    matches = 0
+    for keyword in TECH_KEYWORDS:
+        keyword_lower = keyword.lower()
+        if keyword_lower in job_text_lower and keyword_lower in resume_text_lower:
+            matches += 1
+    
+    boost = min(0.20, matches * 0.05)  # حداکثر ۲۰٪
+    return boost
+
+def min_max_normalize(scores):
+    """
+    نرمال‌سازی Min-Max روی لیست امتیازها
+    خروجی: لیست امتیازهای نرمال شده در بازه ۰ تا ۱
+    """
+    if not scores:
+        return scores
+    
+    min_val = min(scores)
+    max_val = max(scores)
+    
+    if max_val == min_val:
+        return [0.5] * len(scores)
+    
+    return [(x - min_val) / (max_val - min_val) for x in scores]
+
+def calculate_final_score(job_text, resume_text, embedding_score, tfidf_score):
+    """
+    محاسبه امتیاز نهایی با فرمول جدید:
+    1. نرمال‌سازی Embedding و TF-IDF
+    2. ترکیب با وزن‌ها
+    3. اعمال جریمه و پاداش
+    """
+    from config import SCORE_WEIGHTS
+    
+    # نرمال‌سازی امتیازها (با فرض اینکه هر دو در بازه ۰-۱۰۰ هستن)
+    norm_embedding = embedding_score / 100.0
+    norm_tfidf = tfidf_score / 100.0
+    
+    # ترکیب با وزن‌ها
+    base_score = (
+        norm_embedding * SCORE_WEIGHTS['embedding'] +
+        norm_tfidf * SCORE_WEIGHTS['tfidf']
+    )
+    
+    # اعمال جریمه و پاداش
+    penalty = generic_penalty(job_text)
+    boost = domain_boost(job_text, resume_text)
+    
+    final_score = base_score * (1 - penalty) * (1 + boost)
+    
+    # تبدیل به درصد و محدود کردن به ۰-۱۰۰
+    return int(min(100, max(0, final_score * 100)))
 warnings.filterwarnings('ignore')
 
 # ==========================================
@@ -79,16 +157,16 @@ SKILL_GROUPS = {
     "hardware_electronics": {
         "keywords": ["الکترونیک", "طراحی مدار", "pcb", "altium", "میکروکنترلر", 
                      "سنسور", "شبیه‌سازی", "کنترل", "power", "analog", "digital"],
-        "base_weight": 9,
-        "bonus_per_match": 1.5,
+        "base_weight": 10,
+        "bonus_per_match": 2.0,
         "min_matches_for_bonus": 2
     },
     "ai_computer_vision": {
         "keywords": ["هوش مصنوعی", "machine learning", "یادگیری ماشین", "پردازش تصویر", 
                      "opencv", "deep learning", "yolo", "cnn", "tensorflow", "pytorch",
                      "بینایی ماشین", "طبقه‌بندی", "تشخیص", "computer vision"],
-        "base_weight": 8,
-        "bonus_per_match": 2,
+        "base_weight": 9,
+        "bonus_per_match": 2.0,
         "min_matches_for_bonus": 2
     },
     "programming": {
@@ -127,8 +205,8 @@ SKILL_GROUPS = {
             "دبیرخانه", "مدیریت اسناد", "تنظیم قرارداد", "پیگیری",
             "کارمند", "کارمندی", "پذیرش", "دفترداری", "امور اداری"
         ],
-        "base_weight": 8,
-        "bonus_per_match": 1.5,
+        "base_weight": 5,
+        "bonus_per_match": 0.8,
         "min_matches_for_bonus": 3
     },
     "general": {
@@ -314,8 +392,11 @@ def semantic_match_score(job_text, resume_text, skill_keywords):
         return 0
 
 def calculate_outlier_score(scores_list, current_score):
-    """محاسبه‌ی امتیاز outlier با استفاده از Z-Score"""
-    if len(scores_list) < 3:
+    """
+    محاسبه‌ی امتیاز outlier با استفاده از CDF نرمال
+    تبدیل Z-score به percentile با استفاده از توزیع نرمال
+    """
+    if len(scores_list) < 5:
         return 50
     
     mean = np.mean(scores_list)
@@ -325,9 +406,20 @@ def calculate_outlier_score(scores_list, current_score):
         return 50
     
     z_score = (current_score - mean) / std
-    percentile = 50 + (z_score * 34)
     
-    return max(0, min(100, percentile))
+    # استفاده از CDF برای تبدیل Z-score به percentile
+    try:
+        from scipy.stats import norm
+        percentile = norm.cdf(z_score) * 100
+        return int(min(100, max(0, percentile)))
+    except ImportError:
+        # Fallback: اگر scipy نصب نبود، از روش تقریبی استفاده کن
+        # تقریب خوب برای CDF نرمال
+        if z_score >= 0:
+            percentile = 50 + (z_score * 34)  # تقریب خطی برای z-score مثبت
+        else:
+            percentile = 50 + (z_score * 34)
+        return int(min(100, max(0, percentile)))
 
 # ==========================================
 # CALCULATE KEYWORD SCORE
