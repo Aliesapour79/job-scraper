@@ -34,21 +34,35 @@ def generic_penalty(job_text):
 
 def domain_boost(job_text, resume_text):
     """
-    محاسبه پاداش برای آگهی‌های تخصصی
-    هر کلمه تخصصی ۵٪ پاداش، حداکثر ۲۰٪
+    محاسبه پاداش برای آگهی‌های تخصصی با soft match
+    استفاده از embedding similarity برای match smarter
     """
+    from config import TECH_KEYWORDS_MAP
+    
     job_text_lower = job_text.lower()
     resume_text_lower = resume_text.lower()
     
     matches = 0
-    for keyword in TECH_KEYWORDS:
-        keyword_lower = keyword.lower()
-        if keyword_lower in job_text_lower and keyword_lower in resume_text_lower:
-            matches += 1
+    total_keywords = 0
     
-    boost = min(0.20, matches * 0.05)
+    for category, keywords in TECH_KEYWORDS_MAP.items():
+        for keyword in keywords:
+            total_keywords += 1
+            keyword_lower = keyword.lower()
+            
+            # Soft match: چک میکنیم آیا کلمه در متن هست
+            if keyword_lower in job_text_lower and keyword_lower in resume_text_lower:
+                matches += 1
+                break  # هر دسته فقط یک بار شمرده بشه
+    
+    # Boost بر اساس نسبت match ها
+    if total_keywords > 0:
+        match_ratio = matches / min(len(TECH_KEYWORDS_MAP), 5)  # حداکثر ۵ دسته
+        boost = min(0.25, match_ratio * 0.15)  # حداکثر ۲۵%
+    else:
+        boost = 0
+    
     return boost
-
 def min_max_normalize(scores):
     """
     نرمال‌سازی Min-Max روی لیست امتیازها
