@@ -1,13 +1,14 @@
-name: Job Scraper - Daily Run
+# .github/workflows/scrape.yml
+name: Job Matcher - Daily Run
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+    - cron: '0 */6 * * *'  # هر ۶ ساعت
+  workflow_dispatch:        # اجرای دستی
 
 jobs:
-  scrape-jobs:
-    name: Scrape Job Postings
+  job-matcher:
+    name: Match Jobs with Resume
     runs-on: ubuntu-latest
     
     steps:
@@ -32,21 +33,17 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
       
-      - name: Run scraper
+      - name: Run job matcher
         run: |
-          python job_scraper.py
-      
-      - name: Convert JSON to HTML
-        run: |
-          python json_to_html.py
+          python main.py
       
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
           name: job-matches
           path: |
-            job_matches_*.json
-            job_matches_*_report.html
+            job_matches_v4_*.json
+            job_report_v4_*.html
           retention-days: 30
       
       - name: Send results to Telegram
@@ -60,12 +57,12 @@ jobs:
           TOKEN = "'"${{ secrets.TELEGRAM_BOT_TOKEN }}"'"
           CHAT_ID = "'"${{ secrets.TELEGRAM_CHAT_ID }}"'"
           if TOKEN != "" and CHAT_ID != "":
-              files = glob.glob("job_matches_*_report.html")
+              files = glob.glob("job_report_v4_*.html")
               if files:
                   for f in files:
                       with open(f, "rb") as file:
                           now = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
-                          caption = f"📊 گزارش اسکرپینگ {now}"
+                          caption = f"📊 گزارش تطبیق شغلی - {now}"
                           requests.post(
                               f"https://api.telegram.org/bot{TOKEN}/sendDocument",
                               data={"chat_id": CHAT_ID, "caption": caption},
@@ -89,7 +86,7 @@ jobs:
           CHAT_ID = "'"${{ secrets.TELEGRAM_CHAT_ID }}"'"
           if TOKEN != "" and CHAT_ID != "":
               now = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
-              msg = f"❌ اسکرپینگ در تاریخ {now} با خطا مواجه شد!"
+              msg = f"❌ تطبیق شغلی در تاریخ {now} با خطا مواجه شد!"
               requests.post(
                   f"https://api.telegram.org/bot{TOKEN}/sendMessage",
                   data={"chat_id": CHAT_ID, "text": msg}
