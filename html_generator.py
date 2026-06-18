@@ -325,7 +325,7 @@ def generate_html_report(results, filename="job_report.html"):
             # دریافت پیش‌نمایش
             description_preview = job.get('description_preview', '') or 'توضیحاتی موجود نیست'
             
-            # ساخت کارت شغلی
+            # ساخت کارت شغلی با امتیازات جدید
             html_content += f"""
             <div class="job-card">
                 <div class="job-header">
@@ -334,7 +334,8 @@ def generate_html_report(results, filename="job_report.html"):
                         <div class="job-company">🏢 {job.get('company', 'شرکت نامشخص')}</div>
                     </div>
                     <div>
-                        <span class="semantic-badge">🧠 TF-IDF: {job.get('semantic_score', 0) or 0:.0f}%</span>
+                        <span class="semantic-badge">🧠 Embedding: {job.get('embedding_score', 0) or 0:.0f}%</span>
+                        <span class="semantic-badge">📊 TF-IDF: {job.get('tfidf_score', 0) or 0:.0f}%</span>
                         <span class="semantic-badge">📊 Outlier: {job.get('outlier_score', 0) or 0:.0f}%</span>
                         <span class="score-badge {score_class}">{score}%</span>
                     </div>
@@ -383,7 +384,8 @@ if __name__ == "__main__":
             "url": "https://example.com/job1",
             "score": 85,
             "matched_skills": ["python", "هوش مصنوعی", "پردازش تصویر"],
-            "semantic_score": 78,
+            "embedding_score": 82,
+            "tfidf_score": 78,
             "outlier_score": 92,
             "group_analysis": {
                 "programming": {"score": 25, "multiplier": 1.5},
@@ -398,7 +400,8 @@ if __name__ == "__main__":
             "url": "https://example.com/job2",
             "score": 72,
             "matched_skills": ["esp32", "mqtt", "اینترنت اشیاء"],
-            "semantic_score": 65,
+            "embedding_score": 68,
+            "tfidf_score": 65,
             "outlier_score": 70,
             "group_analysis": {
                 "iot_embedded": {"score": 30, "multiplier": 1.5},
