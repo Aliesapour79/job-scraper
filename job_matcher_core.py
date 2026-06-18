@@ -235,12 +235,25 @@ def semantic_match_score(job_text, resume_text, skill_keywords):
     if not job_text or not resume_text:
         return 0
     
-    enhanced_resume = resume_text + " " + " ".join(skill_keywords * 2)
+    # تمیز کردن متن‌ها
     job_text_clean = re.sub(r'[^\w\s\u0600-\u06FF]', ' ', job_text).lower()
-    resume_clean = re.sub(r'[^\w\s\u0600-\u06FF]', ' ', enhanced_resume).lower()
+    resume_clean = re.sub(r'[^\w\s\u0600-\u06FF]', ' ', resume_text).lower()
+    
+    # ترکیب با کلمات کلیدی برای افزایش وزن
+    if skill_keywords:
+        enhanced_resume = resume_clean + " " + " ".join(skill_keywords[:10])
+    else:
+        enhanced_resume = resume_clean
     
     try:
-        corpus = [job_text_clean, resume_clean]
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+        
+        # حداقل طول متن
+        if len(job_text_clean.split()) < 2 or len(enhanced_resume.split()) < 2:
+            return 0
+        
+        corpus = [job_text_clean, enhanced_resume]
         vectorizer = TfidfVectorizer(
             max_features=500,
             stop_words=None,
@@ -249,9 +262,13 @@ def semantic_match_score(job_text, resume_text, skill_keywords):
         )
         
         tfidf_matrix = vectorizer.fit_transform(corpus)
-        similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])
         
-        return similarity[0][0] * 100
+        # بررسی اینکه آیا ماتریس خالی نیست
+        if tfidf_matrix.shape[0] < 2 or tfidf_matrix.nnz == 0:
+            return 0
+            
+        similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])
+        return float(similarity[0][0] * 100)
         
     except Exception as e:
         print(f"  ⚠️ TF-IDF Error: {e}")
