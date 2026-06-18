@@ -63,6 +63,7 @@ def domain_boost(job_text, resume_text):
         boost = 0
     
     return boost
+
 def min_max_normalize(scores):
     """
     نرمال‌سازی Min-Max روی لیست امتیازها
@@ -79,37 +80,60 @@ def min_max_normalize(scores):
     
     return [(x - min_val) / (max_val - min_val) for x in scores]
 
+# ==========================================
+# 🔥 تابع جدید: Multi-Intent Scoring
+# ==========================================
+
 def calculate_final_score(idx, job_text, resume_text, embedding_score, tfidf_score, all_embedding_scores, all_tfidf_scores):
     """
-    محاسبه امتیاز نهایی با فرمول جدید:
-    1. نرمال‌سازی Min-Max روی کل dataset
-    2. ترکیب با وزن‌ها
-    3. اعمال جریمه و پاداش (multiplicative)
+    محاسبه امتیاز نهایی با Multi-Intent Scoring
+    1. Scale-Aware Normalization (به جای Min-Max)
+    2. دو امتیاز جداگانه: Technical و General
+    3. ترکیب نهایی با وزن‌های مشخص
     """
-    from config import SCORE_WEIGHTS
+    from config import SCORE_WEIGHTS, INTENT_WEIGHTS, ADMIN_KEYWORDS
     
-    # نرمال‌سازی Min-Max روی کل dataset
-    norm_embeddings = min_max_normalize(all_embedding_scores)
-    norm_tfidfs = min_max_normalize(all_tfidf_scores)
+    # ====== Scale-Aware Normalization ======
+    # Embedding: 0-100 (طبیعی)
+    norm_embedding = embedding_score / 100.0
     
-    # گرفتن مقدار نرمال شده برای این آگهی
-    norm_embedding = norm_embeddings[idx] if idx < len(norm_embeddings) else 0.5
-    norm_tfidf = norm_tfidfs[idx] if idx < len(norm_tfidfs) else 0.5
+    # TF-IDF: سقف طبیعی حدود 20 هست
+    norm_tfidf = min(tfidf_score / 20.0, 1.0)  # حداکثر 1.0
     
-    # ترکیب با وزن‌ها
-    base_score = (
-        norm_embedding * SCORE_WEIGHTS['embedding'] +
-        norm_tfidf * SCORE_WEIGHTS['tfidf']
+    # ====== محاسبه امتیاز فنی (Technical) ======
+    technical_score = (
+        norm_embedding * 0.7 +
+        norm_tfidf * 0.3
     )
     
-    # اعمال جریمه و پاداش (multiplicative)
-    penalty = generic_penalty(job_text)
+    # ====== محاسبه امتیاز عمومی/اداری (General) ======
+    admin_matches = sum(1 for k in ADMIN_KEYWORDS if k.lower() in job_text.lower())
+    general_score = min(1.0, admin_matches * 0.08)  # حداکثر 1.0
+    
+    # ====== اعمال Boost (پاداش تخصصی) ======
     boost = domain_boost(job_text, resume_text)
+    technical_score = min(1.0, technical_score * (1 + boost))
     
-    # ✅ فرمول multiplicative
-    final_score = base_score * (1 + boost - penalty)
+    # ====== اعمال Penalty (جریمه عمومی) ======
+    penalty = generic_penalty(job_text)
+    general_score = general_score * (1 - penalty)
     
-    return int(min(100, max(0, final_score * 100)))
+    # ====== ترکیب نهایی (Multi-Intent) ======
+    final_score = (
+        technical_score * INTENT_WEIGHTS['technical'] +
+        general_score * INTENT_WEIGHTS['general']
+    )
+    
+    # ====== برگرداندن همه امتیازها برای نمایش ======
+    return {
+        'final': int(min(100, max(0, final_score * 100))),
+        'technical': int(min(100, max(0, technical_score * 100))),
+        'general': int(min(100, max(0, general_score * 100))),
+        'boost': int(boost * 100),
+        'penalty': int(penalty * 100)
+    }
+
+
 warnings.filterwarnings('ignore')
 
 # ==========================================
@@ -222,8 +246,8 @@ SKILL_GROUPS = {
             "دبیرخانه", "مدیریت اسناد", "تنظیم قرارداد", "پیگیری",
             "کارمند", "کارمندی", "پذیرش", "دفترداری", "امور اداری"
         ],
-        "base_weight": 5,
-        "bonus_per_match": 0.8,
+        "base_weight": 4,          # کاهش از ۵ به ۴
+        "bonus_per_match": 0.5,    # کاهش از ۰.۸ به ۰.۵
         "min_matches_for_bonus": 3
     },
     "general": {
@@ -431,9 +455,8 @@ def calculate_outlier_score(scores_list, current_score):
         return int(min(100, max(0, percentile)))
     except ImportError:
         # Fallback: اگر scipy نصب نبود، از روش تقریبی استفاده کن
-        # تقریب خوب برای CDF نرمال
         if z_score >= 0:
-            percentile = 50 + (z_score * 34)  # تقریب خطی برای z-score مثبت
+            percentile = 50 + (z_score * 34)
         else:
             percentile = 50 + (z_score * 34)
         return int(min(100, max(0, percentile)))
