@@ -14,6 +14,7 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import warnings
+from webdriver_manager.chrome import ChromeDriverManager
 warnings.filterwarnings('ignore')
 
 # ==========================================
@@ -124,6 +125,7 @@ JOB_TITLE_WEIGHT_MAP = {
 # SETUP DRIVER
 # ==========================================
 def setup_driver():
+    """Setup Chrome driver with automatic driver management"""
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
@@ -133,13 +135,30 @@ def setup_driver():
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     
-    if platform.system() == 'Windows':
-        chrome_driver_path = r"C:\chromedriver\chromedriver.exe"
-    else:
-        chrome_driver_path = "/usr/local/bin/chromedriver"
-    
-    service = Service(chrome_driver_path)
-    return webdriver.Chrome(service=service, options=options)
+    try:
+        # استفاده از webdriver-manager برای مدیریت خودکار ChromeDriver
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+        print("✅ Chrome driver started successfully!")
+        return driver
+    except Exception as e:
+        print(f"❌ Error setting up Chrome driver: {e}")
+        print("   Trying fallback method...")
+        
+        # Fallback: استفاده از مسیر مستقیم
+        try:
+            if platform.system() == 'Windows':
+                chrome_driver_path = r"C:\chromedriver\chromedriver.exe"
+            else:
+                chrome_driver_path = "/usr/local/bin/chromedriver"
+            
+            service = Service(chrome_driver_path)
+            driver = webdriver.Chrome(service=service, options=options)
+            print("✅ Chrome driver started with fallback!")
+            return driver
+        except:
+            print("❌ Could not start Chrome driver. Please check installation.")
+            raise
 
 # ==========================================
 # EXTRACT JOB DETAILS
