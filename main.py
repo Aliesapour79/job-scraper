@@ -14,7 +14,7 @@ def main():
     
     print("=" * 80)
     print("🚀 JOB MATCHER v5.0 - WITH ADVANCED SCORING")
-    print("   (TF-IDF + Semantic Embedding + Penalty/Boost)")
+    print("   (TF-IDF + Semantic Embedding + Penalty/Boost + Min-Max Normalization)")
     print("=" * 80)
     
     # ==========================================
@@ -65,10 +65,18 @@ def main():
             embedding_scores = [0] * len(jobs)
         
         # ==========================================
-        # محاسبه امتیازات برای هر شغل (NEW)
+        # مرحله ۱: محاسبه همه امتیازها (برای Min-Max Normalization)
         # ==========================================
+        all_tfidf_scores = []
+        all_embedding_scores = []
+        all_job_texts = []
+        all_keyword_scores = []
+        all_matched_keywords = []
+        all_group_results = []
+        all_job_data = []
+        
         for idx, job in enumerate(jobs):
-            # Keyword Score (برای نمایش در گزارش - دیگر در امتیاز نهایی استفاده نمیشه)
+            # Keyword Score (برای نمایش در گزارش)
             keyword_score, matched_keywords, group_results = calculate_keyword_score(
                 job['sections'].get('full_text', ''),
                 job['sections'].get('requirements', ''),
@@ -87,43 +95,62 @@ def main():
             # Embedding Score
             embedding_score = embedding_scores[idx] if idx < len(embedding_scores) else 0
             
-            # ==========================================
-            # ✅ فرمول جدید با جریمه و پاداش
-            # ==========================================
-            from job_matcher_core import calculate_final_score
-            
+            # ذخیره برای مرحله بعد
+            all_job_texts.append(combined_job_text)
+            all_tfidf_scores.append(tfidf_score)
+            all_embedding_scores.append(embedding_score)
+            all_keyword_scores.append(keyword_score)
+            all_matched_keywords.append(matched_keywords)
+            all_group_results.append(group_results)
+            all_job_data.append({
+                "title": job['title'],
+                "company": job['company'],
+                "url": job['url'],
+                "sections": job['sections'],
+                "index": idx
+            })
+        
+        # ==========================================
+        # مرحله ۲: محاسبه امتیاز نهایی با Min-Max Normalization
+        # ==========================================
+        print("🔄 Applying Min-Max normalization and final scoring...\n")
+        
+        for idx, job_data in enumerate(all_job_data):
+            # محاسبه امتیاز نهایی با Min-Max و Multiplicative
             final_score = calculate_final_score(
-                job_text=combined_job_text,
+                idx=idx,
+                job_text=all_job_texts[idx],
                 resume_text=RESUME_TEXT,
-                embedding_score=embedding_score,
-                tfidf_score=tfidf_score
+                embedding_score=all_embedding_scores[idx],
+                tfidf_score=all_tfidf_scores[idx],
+                all_embedding_scores=all_embedding_scores,
+                all_tfidf_scores=all_tfidf_scores
             )
-            # ==========================================
             
             all_scores.append(final_score)
             
             # لاگ دیباگ با نمایش جریمه و پاداش
             from job_matcher_core import generic_penalty, domain_boost
-            penalty = generic_penalty(combined_job_text)
-            boost = domain_boost(combined_job_text, RESUME_TEXT)
+            penalty = generic_penalty(all_job_texts[idx])
+            boost = domain_boost(all_job_texts[idx], RESUME_TEXT)
             
-            print(f"  📊 Job {idx+1}: Embedding={embedding_score:.1f}% | TF-IDF={tfidf_score:.1f}% | "
+            print(f"  📊 Job {idx+1}: Embedding={all_embedding_scores[idx]:.1f}% | TF-IDF={all_tfidf_scores[idx]:.1f}% | "
                   f"Penalty={penalty*100:.0f}% | Boost={boost*100:.0f}% | Final={final_score}%")
             
-            # ذخیره موقت برای outlier
+            # ذخیره نتایج
             results.append({
-                "title": job['title'],
-                "company": job['company'],
-                "url": job['url'],
-                "keyword_score": keyword_score,           # فقط برای نمایش
-                "tfidf_score": int(tfidf_score),
-                "embedding_score": int(embedding_score),
-                "score": final_score,                     # امتیاز نهایی با فرمول جدید
-                "penalty": int(penalty * 100),            # ذخیره جریمه برای دیباگ
-                "boost": int(boost * 100),                # ذخیره پاداش برای دیباگ
-                "matched_skills": matched_keywords,
-                "group_analysis": group_results,
-                "description_preview": job['sections'].get('description', '')[:300],
+                "title": job_data['title'],
+                "company": job_data['company'],
+                "url": job_data['url'],
+                "keyword_score": all_keyword_scores[idx],        # فقط برای نمایش
+                "tfidf_score": int(all_tfidf_scores[idx]),
+                "embedding_score": int(all_embedding_scores[idx]),
+                "score": final_score,                            # امتیاز نهایی با فرمول جدید
+                "penalty": int(penalty * 100),                   # ذخیره جریمه برای دیباگ
+                "boost": int(boost * 100),                       # ذخیره پاداش برای دیباگ
+                "matched_skills": all_matched_keywords[idx],
+                "group_analysis": all_group_results[idx],
+                "description_preview": job_data['sections'].get('description', '')[:300],
                 "index": idx
             })
         
