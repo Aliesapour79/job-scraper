@@ -187,6 +187,24 @@ def generate_html_report(results, filename="job_report.html"):
             color: #1976d2;
             margin-right: 10px;
         }}
+        .technical-badge {{
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            background: #e8f5e9;
+            color: #2e7d32;
+            margin-right: 10px;
+        }}
+        .general-badge {{
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            background: #fff3e0;
+            color: #e65100;
+            margin-right: 10px;
+        }}
         .no-jobs {{
             text-align: center;
             padding: 50px 20px;
@@ -244,6 +262,14 @@ def generate_html_report(results, filename="job_report.html"):
             .semantic-badge {{
                 background: #1a3a5a;
                 color: #6af;
+            }}
+            .technical-badge {{
+                background: #1a3a2a;
+                color: #8f8;
+            }}
+            .general-badge {{
+                background: #3a2a1a;
+                color: #fa8;
             }}
             .no-jobs {{
                 color: #aaa;
@@ -325,7 +351,13 @@ def generate_html_report(results, filename="job_report.html"):
             # دریافت پیش‌نمایش
             description_preview = job.get('description_preview', '') or 'توضیحاتی موجود نیست'
             
-            # ساخت کارت شغلی با امتیازات جدید
+            # دریافت Penalty و Boost
+            penalty = job.get('penalty', 0)
+            boost = job.get('boost', 0)
+            technical_score = job.get('technical_score', 0)
+            general_score = job.get('general_score', 0)
+            
+            # ساخت کارت شغلی با امتیازات جدید (Multi-Intent)
             html_content += f"""
             <div class="job-card">
                 <div class="job-header">
@@ -334,6 +366,8 @@ def generate_html_report(results, filename="job_report.html"):
                         <div class="job-company">🏢 {job.get('company', 'شرکت نامشخص')}</div>
                     </div>
                     <div>
+                        <span class="technical-badge">🎯 Technical: {technical_score}%</span>
+                        <span class="general-badge">📋 General: {general_score}%</span>
                         <span class="semantic-badge">🧠 Embedding: {job.get('embedding_score', 0) or 0:.0f}%</span>
                         <span class="semantic-badge">📊 TF-IDF: {job.get('tfidf_score', 0) or 0:.0f}%</span>
                         <span class="semantic-badge">📊 Outlier: {job.get('outlier_score', 0) or 0:.0f}%</span>
@@ -383,10 +417,14 @@ if __name__ == "__main__":
             "company": "شرکت فناوری نوین",
             "url": "https://example.com/job1",
             "score": 85,
+            "technical_score": 92,
+            "general_score": 35,
             "matched_skills": ["python", "هوش مصنوعی", "پردازش تصویر"],
             "embedding_score": 82,
             "tfidf_score": 78,
             "outlier_score": 92,
+            "penalty": 0,
+            "boost": 10,
             "group_analysis": {
                 "programming": {"score": 25, "multiplier": 1.5},
                 "ai_computer_vision": {"score": 20, "multiplier": 1.2},
@@ -395,19 +433,23 @@ if __name__ == "__main__":
             "description_preview": "شرکت فناوری نوین جهت تکمیل کادر خود به یک برنامه‌نویس پایتون با تجربه در حوزه هوش مصنوعی نیازمند است."
         },
         {
-            "title": "متخصص IoT",
-            "company": "صنایع الکترونیک",
+            "title": "کارمند اداری",
+            "company": "شرکت خدمات اداری",
             "url": "https://example.com/job2",
-            "score": 72,
-            "matched_skills": ["esp32", "mqtt", "اینترنت اشیاء"],
-            "embedding_score": 68,
-            "tfidf_score": 65,
+            "score": 45,
+            "technical_score": 20,
+            "general_score": 78,
+            "matched_skills": ["word", "excel", "اداری"],
+            "embedding_score": 30,
+            "tfidf_score": 25,
             "outlier_score": 70,
+            "penalty": 15,
+            "boost": 0,
             "group_analysis": {
-                "iot_embedded": {"score": 30, "multiplier": 1.5},
-                "hardware_electronics": {"score": 18, "multiplier": 1.2}
+                "office_administration": {"score": 35, "multiplier": 1.0},
+                "general": {"score": 10, "multiplier": 1.0}
             },
-            "description_preview": "شرکت صنایع الکترونیک به دنبال متخصص اینترنت اشیاء با تسلط بر ESP32 و MQTT می‌گردد."
+            "description_preview": "شرکت خدمات اداری به یک کارمند مسلط به Word و Excel نیاز دارد."
         }
     ]
     
