@@ -13,8 +13,8 @@ def main():
     url = "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%B4%D9%87%D8%B1-%D9%82%D8%AF%D8%B3"
     
     print("=" * 80)
-    print("🚀 JOB MATCHER v6.2 - MULTI-INTENT SCORING")
-    print("   (Balanced Technical/General + Context-Aware + Optimized Boost/Penalty)")
+    print("🚀 JOB MATCHER v6.3 - DUAL TRACK + HYBRID SCORING")
+    print("   (Technical Track + Admin Track + Hybrid Jobs)")
     print("=" * 80)
     
     # ==========================================
@@ -39,7 +39,7 @@ def main():
             return
         
         print(f"\n✅ Extracted {len(jobs)} jobs!")
-        print("🔄 Calculating multi-intent match scores...\n")
+        print("🔄 Calculating dual-track match scores...\n")
         
         results = []
         all_scores = []
@@ -70,7 +70,7 @@ def main():
         all_tfidf_scores = []
         all_embedding_scores = []
         all_job_texts = []
-        all_job_titles = []  # جدید برای Context-Aware
+        all_job_titles = []
         all_keyword_scores = []
         all_matched_keywords = []
         all_group_results = []
@@ -101,7 +101,7 @@ def main():
             
             # ذخیره برای مرحله بعد
             all_job_texts.append(combined_job_text)
-            all_job_titles.append(job_title)  # جدید
+            all_job_titles.append(job_title)
             all_tfidf_scores.append(tfidf_score)
             all_embedding_scores.append(embedding_score)
             all_keyword_scores.append(keyword_score)
@@ -116,13 +116,13 @@ def main():
             })
         
         # ==========================================
-        # مرحله ۲: محاسبه امتیاز نهایی با Multi-Intent Scoring (v6.2)
+        # مرحله ۲: محاسبه امتیاز نهایی با v6.3 (Dual Track + Hybrid)
         # ==========================================
-        print("🔄 Applying Multi-Intent scoring (Balanced Technical/General + Context-Aware)...\n")
+        print("🔄 Applying Dual Track scoring (Technical + Admin + Hybrid)...\n")
         
         for idx, job_data in enumerate(all_job_data):
-            # محاسبه امتیاز نهایی با v6.2 و پاس دادن job_title
-            scores = calculate_final_score(
+            # محاسبه امتیاز نهایی با v6.3
+            scores = calculate_final_score_v63(
                 idx=idx,
                 job_text=all_job_texts[idx],
                 resume_text=RESUME_TEXT,
@@ -131,7 +131,7 @@ def main():
                 all_embedding_scores=all_embedding_scores,
                 all_tfidf_scores=all_tfidf_scores,
                 semantic_matcher=semantic_matcher,
-                job_title=all_job_titles[idx]  # ← اضافه شد برای Context-Aware
+                job_title=all_job_titles[idx]
             )
             
             final_score = scores['final']
@@ -139,11 +139,14 @@ def main():
             general_score = scores['general']
             boost = scores['boost']
             penalty = scores['penalty']
+            category = scores['category']
             
             all_scores.append(final_score)
             
-            # لاگ دیباگ با نمایش امتیازهای جداگانه
-            print(f"  📊 Job {idx+1}: Technical={technical_score}% | General={general_score}% | "
+            # نمایش category در لاگ
+            category_icon = "🔧" if category == "technical" else "🧾" if category == "administrative" else "🔀"
+            print(f"  📊 Job {idx+1}: {category_icon} {category.upper()} | "
+                  f"Technical={technical_score}% | General={general_score}% | "
                   f"Boost={boost}% | Penalty={penalty}% | Final={final_score}%")
             
             # ذخیره نتایج
@@ -159,6 +162,7 @@ def main():
                 "score": final_score,
                 "penalty": penalty,
                 "boost": boost,
+                "category": category,  # جدید: دسته‌بندی شغل
                 "matched_skills": all_matched_keywords[idx],
                 "group_analysis": all_group_results[idx],
                 "description_preview": job_data['sections'].get('description', '')[:300],
@@ -171,19 +175,34 @@ def main():
         for result in results:
             result['outlier_score'] = calculate_outlier_score(all_scores, result['score'])
         
-        # فیلتر بر اساس امتیاز
+        # ==========================================
+        # فیلتر بر اساس امتیاز (با حفظ آگهی‌های اداری)
+        # ==========================================
         min_score = FILTERS.get('min_score', 20)
-        filtered_results = [r for r in results if r['score'] >= min_score]
+        
+        # جدا کردن آگهی‌های اداری با امتیاز پایین
+        admin_jobs = [r for r in results if r.get('category') == 'administrative' and r['score'] < min_score]
+        other_jobs = [r for r in results if r.get('category') != 'administrative' or r['score'] >= min_score]
+        
+        # فیلتر کردن سایر آگهی‌ها
+        filtered_results = [r for r in other_jobs if r['score'] >= min_score]
+        
+        # اضافه کردن آگهی‌های اداری (حتی با امتیاز پایین) با برچسب ویژه
+        for admin_job in admin_jobs:
+            admin_job['is_admin_safety'] = True  # برای نمایش در HTML
+            filtered_results.append(admin_job)
+        
+        # مرتب‌سازی بر اساس امتیاز
         filtered_results.sort(key=lambda x: x['score'], reverse=True)
         
         # ==========================================
         # ذخیره نتایج
         # ==========================================
-        json_filename = f"output/job_matches_v6.2_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        json_filename = f"output/job_matches_v6.3_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(json_filename, "w", encoding="utf-8") as f:
             json.dump(filtered_results, f, ensure_ascii=False, indent=2)
         
-        html_filename = f"output/job_report_v6.2_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        html_filename = f"output/job_report_v6.3_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
         generate_html_report(filtered_results, html_filename)
         
         # ==========================================
@@ -192,13 +211,23 @@ def main():
         print("=" * 80)
         print(f"📁 Results saved to: {json_filename}")
         print(f"📄 HTML report: {html_filename}")
+        
+        # آمار دسته‌بندی
+        tech_count = sum(1 for r in filtered_results if r.get('category') == 'technical')
+        admin_count = sum(1 for r in filtered_results if r.get('category') == 'administrative')
+        hybrid_count = sum(1 for r in filtered_results if r.get('category') == 'hybrid')
+        
         print(f"🎯 Found {len(filtered_results)} relevant jobs out of {len(jobs)}")
+        print(f"   🔧 Technical: {tech_count} | 🧾 Admin: {admin_count} | 🔀 Hybrid: {hybrid_count}")
         print("=" * 80)
         
         if filtered_results:
             print("\n🏆 TOP 5 MATCHING JOBS:\n")
             for i, job in enumerate(filtered_results[:5], 1):
-                print(f"{i}. [{job['score']}%] {job['title']}")
+                category_icon = "🔧" if job.get('category') == 'technical' else "🧾" if job.get('category') == 'administrative' else "🔀"
+                safety_tag = " 🛡️" if job.get('is_admin_safety') else ""
+                
+                print(f"{i}. {category_icon} [{job['score']}%] {job['title']}{safety_tag}")
                 print(f"   🏢 {job['company']}")
                 print(f"   🎯 Technical: {job.get('technical_score', 0)}% | 📋 General: {job.get('general_score', 0)}%")
                 print(f"   📊 Embedding: {job['embedding_score']}% | TF-IDF: {job['tfidf_score']}%")
