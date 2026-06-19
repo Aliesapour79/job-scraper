@@ -57,8 +57,8 @@ jobs:
         with:
           name: job-matches
           path: |
-            output/job_matches_v6.2_*.json
-            output/job_report_v6.2_*.html
+            output/job_matches_v6.3_*.json
+            output/job_report_v6.3_*.html
           retention-days: 30
       
       - name: Send results to Telegram
@@ -72,12 +72,12 @@ jobs:
           TOKEN = "'"${{ secrets.TELEGRAM_BOT_TOKEN }}"'"
           CHAT_ID = "'"${{ secrets.TELEGRAM_CHAT_ID }}"'"
           if TOKEN != "" and CHAT_ID != "":
-              files = glob.glob("output/job_report_v6.2_*.html")
+              files = glob.glob("output/job_report_v6.3_*.html")
               if files:
                   for f in files:
                       with open(f, "rb") as file:
                           now = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
-                          caption = f"📊 گزارش تطبیق شغلی v6.2 (Multi-Intent + Weighted General) - {now}"
+                          caption = f"📊 گزارش تطبیق شغلی v6.3 (Multi-Intent + Weighted General) - {now}"
                           requests.post(
                               f"https://api.telegram.org/bot{TOKEN}/sendDocument",
                               data={"chat_id": CHAT_ID, "caption": caption},
@@ -101,7 +101,7 @@ jobs:
           CHAT_ID = "'"${{ secrets.TELEGRAM_CHAT_ID }}"'"
           if TOKEN != "" and CHAT_ID != "":
               now = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
-              msg = f"❌ تطبیق شغلی v6.2 (Multi-Intent) در تاریخ {now} با خطا مواجه شد!"
+              msg = f"❌ تطبیق شغلی v6.3 (Multi-Intent) در تاریخ {now} با خطا مواجه شد!"
               requests.post(
                   f"https://api.telegram.org/bot{TOKEN}/sendMessage",
                   data={"chat_id": CHAT_ID, "text": msg}
