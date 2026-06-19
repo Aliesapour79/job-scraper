@@ -17,10 +17,10 @@ import warnings
 from webdriver_manager.chrome import ChromeDriverManager
 
 # ==========================================
-# توابع جدید: Penalty, Boost, Normalization
+# توابع جدید: Penalty, Boost, General Score
 # ==========================================
 
-from config import GENERIC_KEYWORDS, TECH_KEYWORDS_MAP
+from config import GENERIC_KEYWORDS, TECH_KEYWORDS_MAP, ADMIN_KEYWORDS_WEIGHTED
 
 def generic_penalty(job_text):
     """
@@ -32,36 +32,84 @@ def generic_penalty(job_text):
     penalty = min(0.20, count * 0.05)
     return penalty
 
-def domain_boost(job_text, resume_text):
+def calculate_general_score(job_text):
     """
-    محاسبه پاداش برای آگهی‌های تخصصی با soft match
-    استفاده از embedding similarity برای match smarter
+    محاسبه امتیاز عمومی با وزن‌دهی به کلمات
+    """
+    from config import ADMIN_KEYWORDS_WEIGHTED
+    
+    job_text_lower = job_text.lower()
+    total_score = 0
+    
+    for keyword, weight in ADMIN_KEYWORDS_WEIGHTED.items():
+        keyword_lower = keyword.lower()
+        if keyword_lower in job_text_lower:
+            total_score += weight
+        # partial match برای کلمات ترکیبی
+        elif len(keyword_lower) > 3:
+            parts = keyword_lower.split()
+            if any(part in job_text_lower for part in parts):
+                total_score += weight * 0.5
+    
+    # نرمال‌سازی: حداکثر ۱۰۰
+    general_score = min(100, total_score * 5)
+    return int(general_score)
+
+def domain_boost(job_text, resume_text, semantic_matcher=None):
+    """
+    محاسبه پاداش با استفاده از semantic similarity
+    اگر semantic_matcher در دسترس باشه، از embedding استفاده میکنه
+    در غیر این صورت از rule-based استفاده میکنه
     """
     from config import TECH_KEYWORDS_MAP
     
+    # ====== روش Semantic (با embedding) ======
+    if semantic_matcher:
+        try:
+            # محاسبه embedding برای متن‌ها
+            job_emb = semantic_matcher.encode_texts([job_text])[0]
+            resume_emb = semantic_matcher.encode_texts([resume_text])[0]
+            
+            # محاسبه شباهت کلی
+            from sklearn.metrics.pairwise import cosine_similarity
+            sim = cosine_similarity([job_emb], [resume_emb])[0][0]
+            
+            # تبدیل شباهت به Boost
+            if sim > 0.5:
+                return 20
+            elif sim > 0.4:
+                return 15
+            elif sim > 0.3:
+                return 10
+            elif sim > 0.25:
+                return 5
+            else:
+                return 0
+        except:
+            pass  # fallback به روش rule-based
+    
+    # ====== روش Rule-Based (fallback) ======
     job_text_lower = job_text.lower()
     resume_text_lower = resume_text.lower()
     
     matches = 0
-    total_keywords = 0
-    
     for category, keywords in TECH_KEYWORDS_MAP.items():
         for keyword in keywords:
-            total_keywords += 1
             keyword_lower = keyword.lower()
-            
-            # Soft match: چک میکنیم آیا کلمه در متن هست
+            # Exact match
             if keyword_lower in job_text_lower and keyword_lower in resume_text_lower:
                 matches += 1
-                break  # هر دسته فقط یک بار شمرده بشه
+                break
+            # Partial match برای کلمات ترکیبی
+            elif len(keyword_lower) > 3:
+                parts = keyword_lower.split()
+                if any(part in job_text_lower for part in parts) and \
+                   any(part in resume_text_lower for part in parts):
+                    matches += 0.5
+                    break
     
-    # Boost بر اساس نسبت match ها
-    if total_keywords > 0:
-        match_ratio = matches / min(len(TECH_KEYWORDS_MAP), 5)  # حداکثر ۵ دسته
-        boost = min(0.25, match_ratio * 0.15)  # حداکثر ۲۵%
-    else:
-        boost = 0
-    
+    # محاسبه Boost: هر match ۵٪، حداکثر ۲۰٪
+    boost = min(20, int(matches * 5))
     return boost
 
 def min_max_normalize(scores):
@@ -81,56 +129,58 @@ def min_max_normalize(scores):
     return [(x - min_val) / (max_val - min_val) for x in scores]
 
 # ==========================================
-# 🔥 تابع جدید: Multi-Intent Scoring
+# 🔥 تابع Multi-Intent Scoring (نسخه نهایی)
 # ==========================================
 
-def calculate_final_score(idx, job_text, resume_text, embedding_score, tfidf_score, all_embedding_scores, all_tfidf_scores):
+def calculate_final_score(idx, job_text, resume_text, embedding_score, tfidf_score, 
+                          all_embedding_scores, all_tfidf_scores, semantic_matcher=None):
     """
     محاسبه امتیاز نهایی با Multi-Intent Scoring
-    1. Scale-Aware Normalization (به جای Min-Max)
-    2. دو امتیاز جداگانه: Technical و General
-    3. ترکیب نهایی با وزن‌های مشخص
+    نسخه نهایی با تمام اصلاحات:
+    1. Scale-Aware Normalization
+    2. General Score با وزن‌دهی
+    3. Boost با semantic similarity
+    4. ترکیب additive برای Boost/Penalty
+    5. فرمول نهایی بدون شرط
     """
-    from config import SCORE_WEIGHTS, INTENT_WEIGHTS, ADMIN_KEYWORDS
+    from config import SCORE_WEIGHTS, INTENT_WEIGHTS
     
     # ====== Scale-Aware Normalization ======
-    # Embedding: 0-100 (طبیعی)
     norm_embedding = embedding_score / 100.0
+    norm_tfidf = min(tfidf_score / 20.0, 1.0)
     
-    # TF-IDF: سقف طبیعی حدود 20 هست
-    norm_tfidf = min(tfidf_score / 20.0, 1.0)  # حداکثر 1.0
+    # ====== Technical Score ======
+    technical_score = (norm_embedding * 0.7 + norm_tfidf * 0.3) * 100
     
-    # ====== محاسبه امتیاز فنی (Technical) ======
-    technical_score = (
-        norm_embedding * 0.7 +
-        norm_tfidf * 0.3
-    )
+    # ====== General Score (با وزن‌دهی) ======
+    general_score = calculate_general_score(job_text)
     
-    # ====== محاسبه امتیاز عمومی/اداری (General) ======
-    admin_matches = sum(1 for k in ADMIN_KEYWORDS if k.lower() in job_text.lower())
-    general_score = min(1.0, admin_matches * 0.08)  # حداکثر 1.0
+    # ====== Boost (Semantic) ======
+    boost = domain_boost(job_text, resume_text, semantic_matcher)
     
-    # ====== اعمال Boost (پاداش تخصصی) ======
-    boost = domain_boost(job_text, resume_text)
-    technical_score = min(1.0, technical_score * (1 + boost))
-    
-    # ====== اعمال Penalty (جریمه عمومی) ======
+    # ====== Penalty ======
     penalty = generic_penalty(job_text)
-    general_score = general_score * (1 - penalty)
+    penalty_percent = int(penalty * 100)
     
-    # ====== ترکیب نهایی (Multi-Intent) ======
-    final_score = (
-        technical_score * INTENT_WEIGHTS['technical'] +
-        general_score * INTENT_WEIGHTS['general']
+    # ====== اعمال Boost و Penalty (Additive) ======
+    technical_score = technical_score + boost - penalty_percent
+    technical_score = max(0, min(100, technical_score))
+    
+    # ====== ترکیب نهایی (بدون شرط) ======
+    final_score = max(
+        technical_score,
+        0.85 * general_score
     )
     
-    # ====== برگرداندن همه امتیازها برای نمایش ======
+    # محدود کردن به ۰-۱۰۰
+    final_score = int(min(100, max(0, final_score)))
+    
     return {
-        'final': int(min(100, max(0, final_score * 100))),
-        'technical': int(min(100, max(0, technical_score * 100))),
-        'general': int(min(100, max(0, general_score * 100))),
-        'boost': int(boost * 100),
-        'penalty': int(penalty * 100)
+        'final': final_score,
+        'technical': int(technical_score),
+        'general': int(general_score),
+        'boost': boost,
+        'penalty': penalty_percent
     }
 
 
@@ -246,8 +296,8 @@ SKILL_GROUPS = {
             "دبیرخانه", "مدیریت اسناد", "تنظیم قرارداد", "پیگیری",
             "کارمند", "کارمندی", "پذیرش", "دفترداری", "امور اداری"
         ],
-        "base_weight": 4,          # کاهش از ۵ به ۴
-        "bonus_per_match": 0.5,    # کاهش از ۰.۸ به ۰.۵
+        "base_weight": 4,
+        "bonus_per_match": 0.5,
         "min_matches_for_bonus": 3
     },
     "general": {
@@ -311,7 +361,6 @@ def setup_driver():
     options.add_experimental_option('useAutomationExtension', False)
     
     try:
-        # استفاده از webdriver-manager برای مدیریت خودکار ChromeDriver
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
         print("✅ Chrome driver started successfully!")
@@ -320,7 +369,6 @@ def setup_driver():
         print(f"❌ Error setting up Chrome driver: {e}")
         print("   Trying fallback method...")
         
-        # Fallback: استفاده از مسیر مستقیم
         try:
             if platform.system() == 'Windows':
                 chrome_driver_path = r"C:\chromedriver\chromedriver.exe"
@@ -435,7 +483,6 @@ def semantic_match_score(job_text, resume_text, skill_keywords):
 def calculate_outlier_score(scores_list, current_score):
     """
     محاسبه‌ی امتیاز outlier با استفاده از CDF نرمال
-    تبدیل Z-score به percentile با استفاده از توزیع نرمال
     """
     if len(scores_list) < 5:
         return 50
@@ -448,13 +495,11 @@ def calculate_outlier_score(scores_list, current_score):
     
     z_score = (current_score - mean) / std
     
-    # استفاده از CDF برای تبدیل Z-score به percentile
     try:
         from scipy.stats import norm
         percentile = norm.cdf(z_score) * 100
         return int(min(100, max(0, percentile)))
     except ImportError:
-        # Fallback: اگر scipy نصب نبود، از روش تقریبی استفاده کن
         if z_score >= 0:
             percentile = 50 + (z_score * 34)
         else:
@@ -472,7 +517,6 @@ def calculate_keyword_score(full_text, requirements_text, description_text, titl
     description_lower = description_text.lower()
     title_lower = title_text.lower()
     
-    # Dynamic weight adjustment
     group_weight_multipliers = defaultdict(float)
     for keyword, group_names in JOB_TITLE_WEIGHT_MAP.items():
         if keyword.lower() in title_lower:
@@ -532,7 +576,6 @@ def calculate_keyword_score(full_text, requirements_text, description_text, titl
         }
         total_score += group_score
     
-    # Normalize
     max_possible_score = sum([
         config["base_weight"] * 5 * 0.3 + (config["base_weight"] * 0.5) 
         for config in SKILL_GROUPS.values()
@@ -560,19 +603,15 @@ def calculate_match_score_advanced(sections, job_title="", all_scores=None):
     description_text = sections.get("description", "")
     title_text = sections.get("title", "") or job_title
     
-    # 📊 STEP 1: Keyword-based scoring (Level 2)
     keyword_score, matched_keywords, group_results = calculate_keyword_score(
         full_text, requirements_text, description_text, title_text
     )
     
-    # 📊 STEP 2: Semantic scoring (Level 3 - TF-IDF)
     combined_job_text = f"{title_text} {description_text} {requirements_text}"
     semantic_score = semantic_match_score(combined_job_text, RESUME_TEXT, matched_keywords)
     
-    # 📊 STEP 3: Combined score
     final_score = int((keyword_score * 0.7) + (semantic_score * 0.3))
     
-    # 📊 STEP 4: Outlier score (Level 3 - Z-Score)
     outlier_score = 0
     if all_scores and len(all_scores) > 2:
         outlier_score = calculate_outlier_score(all_scores, final_score)
