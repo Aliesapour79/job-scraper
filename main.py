@@ -13,8 +13,8 @@ def main():
     url = "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%B4%D9%87%D8%B1-%D9%82%D8%AF%D8%B3"
     
     print("=" * 80)
-    print("🚀 JOB MATCHER v6.1 - MULTI-INTENT SCORING")
-    print("   (Technical + Weighted General + Semantic Boost)")
+    print("🚀 JOB MATCHER v6.2 - MULTI-INTENT SCORING")
+    print("   (Balanced Technical/General + Context-Aware + Optimized Boost/Penalty)")
     print("=" * 80)
     
     # ==========================================
@@ -70,6 +70,7 @@ def main():
         all_tfidf_scores = []
         all_embedding_scores = []
         all_job_texts = []
+        all_job_titles = []  # جدید برای Context-Aware
         all_keyword_scores = []
         all_matched_keywords = []
         all_group_results = []
@@ -95,8 +96,12 @@ def main():
             # Embedding Score
             embedding_score = embedding_scores[idx] if idx < len(embedding_scores) else 0
             
+            # عنوان شغلی برای Context-Aware
+            job_title = job['title']
+            
             # ذخیره برای مرحله بعد
             all_job_texts.append(combined_job_text)
+            all_job_titles.append(job_title)  # جدید
             all_tfidf_scores.append(tfidf_score)
             all_embedding_scores.append(embedding_score)
             all_keyword_scores.append(keyword_score)
@@ -111,12 +116,12 @@ def main():
             })
         
         # ==========================================
-        # مرحله ۲: محاسبه امتیاز نهایی با Multi-Intent Scoring (v6.1)
+        # مرحله ۲: محاسبه امتیاز نهایی با Multi-Intent Scoring (v6.2)
         # ==========================================
-        print("🔄 Applying Multi-Intent scoring (Weighted General + Semantic Boost)...\n")
+        print("🔄 Applying Multi-Intent scoring (Balanced Technical/General + Context-Aware)...\n")
         
         for idx, job_data in enumerate(all_job_data):
-            # محاسبه امتیاز نهایی با Multi-Intent و semantic_matcher
+            # محاسبه امتیاز نهایی با v6.2 و پاس دادن job_title
             scores = calculate_final_score(
                 idx=idx,
                 job_text=all_job_texts[idx],
@@ -125,7 +130,8 @@ def main():
                 tfidf_score=all_tfidf_scores[idx],
                 all_embedding_scores=all_embedding_scores,
                 all_tfidf_scores=all_tfidf_scores,
-                semantic_matcher=semantic_matcher  # ← اضافه شد برای Boost semantic
+                semantic_matcher=semantic_matcher,
+                job_title=all_job_titles[idx]  # ← اضافه شد برای Context-Aware
             )
             
             final_score = scores['final']
@@ -173,11 +179,11 @@ def main():
         # ==========================================
         # ذخیره نتایج
         # ==========================================
-        json_filename = f"output/job_matches_v6.1_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        json_filename = f"output/job_matches_v6.2_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(json_filename, "w", encoding="utf-8") as f:
             json.dump(filtered_results, f, ensure_ascii=False, indent=2)
         
-        html_filename = f"output/job_report_v6.1_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        html_filename = f"output/job_report_v6.2_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
         generate_html_report(filtered_results, html_filename)
         
         # ==========================================
