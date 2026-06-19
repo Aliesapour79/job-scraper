@@ -32,9 +32,10 @@ def generic_penalty(job_text):
     penalty = min(0.20, count * 0.05)
     return penalty
 
-def calculate_general_score(job_text):
+def calculate_general_score(job_text, job_title=""):
     """
     محاسبه امتیاز عمومی با وزن‌دهی به کلمات
+    Context-aware: اگر عنوان شامل کلمات اداری باشه، ضریب میخوره
     """
     from config import ADMIN_KEYWORDS_WEIGHTED
     
@@ -53,6 +54,12 @@ def calculate_general_score(job_text):
     
     # نرمال‌سازی: حداکثر ۱۰۰
     general_score = min(100, total_score * 5)
+    
+    # ====== Context-Aware: تقویت General برای آگهی‌های اداری ======
+    job_title_lower = job_title.lower()
+    if "منشی" in job_title_lower or "اداری" in job_title_lower:
+        general_score = min(100, general_score * 1.2)
+    
     return int(general_score)
 
 def domain_boost(job_text, resume_text, semantic_matcher=None):
@@ -74,13 +81,13 @@ def domain_boost(job_text, resume_text, semantic_matcher=None):
             from sklearn.metrics.pairwise import cosine_similarity
             sim = cosine_similarity([job_emb], [resume_emb])[0][0]
             
-            # تبدیل شباهت به Boost
+            # تبدیل شباهت به Boost (کمتر از قبل)
             if sim > 0.5:
-                return 20
-            elif sim > 0.4:
                 return 15
-            elif sim > 0.3:
+            elif sim > 0.4:
                 return 10
+            elif sim > 0.3:
+                return 8
             elif sim > 0.25:
                 return 5
             else:
@@ -108,8 +115,8 @@ def domain_boost(job_text, resume_text, semantic_matcher=None):
                     matches += 0.5
                     break
     
-    # محاسبه Boost: هر match ۵٪، حداکثر ۲۰٪
-    boost = min(20, int(matches * 5))
+    # محاسبه Boost: هر match ۴٪، حداکثر ۱۵٪ (کمتر از قبل)
+    boost = min(15, int(matches * 4))
     return boost
 
 def min_max_normalize(scores):
@@ -129,19 +136,18 @@ def min_max_normalize(scores):
     return [(x - min_val) / (max_val - min_val) for x in scores]
 
 # ==========================================
-# 🔥 تابع Multi-Intent Scoring (نسخه نهایی)
+# 🔥 تابع Multi-Intent Scoring (نسخه v6.2)
 # ==========================================
 
 def calculate_final_score(idx, job_text, resume_text, embedding_score, tfidf_score, 
-                          all_embedding_scores, all_tfidf_scores, semantic_matcher=None):
+                          all_embedding_scores, all_tfidf_scores, semantic_matcher=None, job_title=""):
     """
     محاسبه امتیاز نهایی با Multi-Intent Scoring
-    نسخه نهایی با تمام اصلاحات:
-    1. Scale-Aware Normalization
-    2. General Score با وزن‌دهی
-    3. Boost با semantic similarity
-    4. ترکیب additive برای Boost/Penalty
-    5. فرمول نهایی بدون شرط
+    نسخه v6.2 با اصلاحات:
+    1. فرمول نهایی: 0.65 * technical + 0.35 * general
+    2. Boost به صورت additive روی final اعمال میشه
+    3. Penalty قوی‌تر روی final اعمال میشه
+    4. Context-aware General برای آگهی‌های اداری
     """
     from config import SCORE_WEIGHTS, INTENT_WEIGHTS
     
@@ -152,25 +158,29 @@ def calculate_final_score(idx, job_text, resume_text, embedding_score, tfidf_sco
     # ====== Technical Score ======
     technical_score = (norm_embedding * 0.7 + norm_tfidf * 0.3) * 100
     
-    # ====== General Score (با وزن‌دهی) ======
-    general_score = calculate_general_score(job_text)
+    # ====== General Score (با وزن‌دهی و Context-Aware) ======
+    general_score = calculate_general_score(job_text, job_title)
     
-    # ====== Boost (Semantic) ======
+    # ====== Boost (Semantic - کمتر از قبل) ======
     boost = domain_boost(job_text, resume_text, semantic_matcher)
     
     # ====== Penalty ======
     penalty = generic_penalty(job_text)
     penalty_percent = int(penalty * 100)
     
-    # ====== اعمال Boost و Penalty (Additive) ======
-    technical_score = technical_score + boost - penalty_percent
-    technical_score = max(0, min(100, technical_score))
+    # ====== ترکیب نهایی (فرمول جدید) ======
+    # 1. ترکیب Technical و General با وزن‌های 0.65 و 0.35
+    final_score = (0.65 * technical_score) + (0.35 * general_score)
     
-    # ====== ترکیب نهایی (بدون شرط) ======
-    final_score = max(
-        technical_score,
-        0.85 * general_score
-    )
+    # 2. اعمال Boost به صورت Additive (نه روی Technical)
+    final_score = final_score + (boost * 0.5)
+    
+    # 3. اعمال Penalty قوی‌تر
+    final_score = final_score * (1 - penalty)
+    
+    # 4. اگر job کاملاً اداری بود، یه boost کوچیک
+    if general_score > 40 and technical_score < 30:
+        final_score += 5
     
     # محدود کردن به ۰-۱۰۰
     final_score = int(min(100, max(0, final_score)))
