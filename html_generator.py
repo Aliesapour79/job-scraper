@@ -195,6 +195,7 @@ def generate_html_report(results, filename="job_report.html"):
             background: #e8f5e9;
             color: #2e7d32;
             margin-right: 10px;
+            font-weight: bold;
         }}
         .general-badge {{
             display: inline-block;
@@ -203,6 +204,25 @@ def generate_html_report(results, filename="job_report.html"):
             font-size: 12px;
             background: #fff3e0;
             color: #e65100;
+            margin-right: 10px;
+            font-weight: bold;
+        }}
+        .penalty-badge {{
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            background: #ffebee;
+            color: #c62828;
+            margin-right: 10px;
+        }}
+        .boost-badge {{
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            background: #e8f5e9;
+            color: #2e7d32;
             margin-right: 10px;
         }}
         .no-jobs {{
@@ -271,6 +291,14 @@ def generate_html_report(results, filename="job_report.html"):
                 background: #3a2a1a;
                 color: #fa8;
             }}
+            .penalty-badge {{
+                background: #3a1a1a;
+                color: #f88;
+            }}
+            .boost-badge {{
+                background: #1a3a2a;
+                color: #8f8;
+            }}
             .no-jobs {{
                 color: #aaa;
             }}
@@ -280,7 +308,7 @@ def generate_html_report(results, filename="job_report.html"):
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎯 گزارش تطبیق شغلی</h1>
+            <h1>🎯 گزارش تطبیق شغلی v6.1</h1>
             <div class="subtitle">
                 بر اساس رزومه‌ی علی عیسی‌پور شربیانی | 
                 تاریخ: {datetime.now().strftime('%Y/%m/%d %H:%M')}
@@ -351,11 +379,15 @@ def generate_html_report(results, filename="job_report.html"):
             # دریافت پیش‌نمایش
             description_preview = job.get('description_preview', '') or 'توضیحاتی موجود نیست'
             
-            # دریافت Penalty و Boost
+            # دریافت امتیازات
             penalty = job.get('penalty', 0)
             boost = job.get('boost', 0)
             technical_score = job.get('technical_score', 0)
             general_score = job.get('general_score', 0)
+            
+            # ساخت HTML برای Penalty و Boost (اگر > 0 باشن)
+            penalty_html = f'<span class="penalty-badge">⚠️ Penalty: -{penalty}%</span>' if penalty > 0 else ''
+            boost_html = f'<span class="boost-badge">🚀 Boost: +{boost}%</span>' if boost > 0 else ''
             
             # ساخت کارت شغلی با امتیازات جدید (Multi-Intent)
             html_content += f"""
@@ -371,6 +403,8 @@ def generate_html_report(results, filename="job_report.html"):
                         <span class="semantic-badge">🧠 Embedding: {job.get('embedding_score', 0) or 0:.0f}%</span>
                         <span class="semantic-badge">📊 TF-IDF: {job.get('tfidf_score', 0) or 0:.0f}%</span>
                         <span class="semantic-badge">📊 Outlier: {job.get('outlier_score', 0) or 0:.0f}%</span>
+                        {penalty_html}
+                        {boost_html}
                         <span class="score-badge {score_class}">{score}%</span>
                     </div>
                 </div>
