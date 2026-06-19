@@ -13,8 +13,8 @@ def main():
     url = "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%B4%D9%87%D8%B1-%D9%82%D8%AF%D8%B3"
     
     print("=" * 80)
-    print("🚀 JOB MATCHER v6.0 - MULTI-INTENT SCORING")
-    print("   (Technical + General + Penalty/Boost)")
+    print("🚀 JOB MATCHER v6.1 - MULTI-INTENT SCORING")
+    print("   (Technical + Weighted General + Semantic Boost)")
     print("=" * 80)
     
     # ==========================================
@@ -111,12 +111,12 @@ def main():
             })
         
         # ==========================================
-        # مرحله ۲: محاسبه امتیاز نهایی با Multi-Intent Scoring
+        # مرحله ۲: محاسبه امتیاز نهایی با Multi-Intent Scoring (v6.1)
         # ==========================================
-        print("🔄 Applying Multi-Intent scoring (Technical + General)...\n")
+        print("🔄 Applying Multi-Intent scoring (Weighted General + Semantic Boost)...\n")
         
         for idx, job_data in enumerate(all_job_data):
-            # محاسبه امتیاز نهایی با Multi-Intent
+            # محاسبه امتیاز نهایی با Multi-Intent و semantic_matcher
             scores = calculate_final_score(
                 idx=idx,
                 job_text=all_job_texts[idx],
@@ -124,7 +124,8 @@ def main():
                 embedding_score=all_embedding_scores[idx],
                 tfidf_score=all_tfidf_scores[idx],
                 all_embedding_scores=all_embedding_scores,
-                all_tfidf_scores=all_tfidf_scores
+                all_tfidf_scores=all_tfidf_scores,
+                semantic_matcher=semantic_matcher  # ← اضافه شد برای Boost semantic
             )
             
             final_score = scores['final']
@@ -147,11 +148,11 @@ def main():
                 "keyword_score": all_keyword_scores[idx],
                 "tfidf_score": int(all_tfidf_scores[idx]),
                 "embedding_score": int(all_embedding_scores[idx]),
-                "technical_score": technical_score,      # جدید
-                "general_score": general_score,          # جدید
+                "technical_score": technical_score,
+                "general_score": general_score,
                 "score": final_score,
-                "penalty": penalty,                      # جدید
-                "boost": boost,                          # جدید
+                "penalty": penalty,
+                "boost": boost,
                 "matched_skills": all_matched_keywords[idx],
                 "group_analysis": all_group_results[idx],
                 "description_preview": job_data['sections'].get('description', '')[:300],
@@ -172,11 +173,11 @@ def main():
         # ==========================================
         # ذخیره نتایج
         # ==========================================
-        json_filename = f"output/job_matches_v6_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        json_filename = f"output/job_matches_v6.1_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(json_filename, "w", encoding="utf-8") as f:
             json.dump(filtered_results, f, ensure_ascii=False, indent=2)
         
-        html_filename = f"output/job_report_v6_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
+        html_filename = f"output/job_report_v6.1_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html"
         generate_html_report(filtered_results, html_filename)
         
         # ==========================================
