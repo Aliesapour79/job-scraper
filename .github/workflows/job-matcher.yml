@@ -2,9 +2,8 @@ name: Job Matcher - Daily Run
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 0 */3 * *'   # هر ۳ روز یکبار ساعت ۰۰:۰۰
   workflow_dispatch:
-
 jobs:
   job-matcher:
     name: Match Jobs with Resume (Multi-Site)
