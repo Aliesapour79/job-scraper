@@ -1,127 +1,109 @@
-````markdown
 # 🎯 AI Job Matcher - Reverse ATS
 
 [![GitHub Actions](https://github.com/Aliesapour79/job-scraper/actions/workflows/job-matcher.yml/badge.svg)](https://github.com/Aliesapour79/job-scraper/actions)
 [![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-> **An intelligent AI-powered system that matches job listings with your resume and ranks the best opportunities automatically.**
+---
+
+## 🧠 Overview
+
+**AI Job Matcher** is an intelligent automation system that analyzes job listings and matches them with your resume using AI, NLP, and scoring algorithms.
+
+It helps you:
+
+- 🔍 Find relevant job opportunities automatically  
+- 🧠 Match jobs with your resume using semantic similarity  
+- 📊 Rank jobs based on relevance and fit  
+- 📩 Send automated reports via Telegram  
+- ⏰ Run continuously via GitHub Actions  
+
+> ⚠️ This is a personal decision-support system, not a commercial SaaS.
 
 ---
 
-## 🎯 What is this?
+## ✨ Key Features
 
-AI Job Matcher is a personal automation tool that:
-
-- 🔍 Scrapes job listings from multiple job portals
-- 🧠 Matches jobs with your resume using AI & NLP
-- 📊 Ranks opportunities based on relevance and fit
-- 📧 Sends automated reports via Telegram
-
-👉 This project is a **personal decision-support system**, not a SaaS product.
-
----
-
-## ✨ Features
-
-| Feature | Description |
-|--------|-------------|
-| 🔄 Multi-site scraping | Supports e-estekhdam & Jobvision (extensible) |
-| 🧠 Smart matching | TF-IDF + Sentence Embeddings + Semantic scoring |
-| 🎯 Dual-track scoring | Separate scoring for Technical & General roles |
-| 🏷️ Auto categorization | Detects Technical / Administrative / Hybrid jobs |
-| 📊 Advanced reporting | HTML + JSON structured output |
-| 🚨 Outlier detection | Highlights unusually strong job matches |
-| ⏰ Automation | Runs every 6 hours via GitHub Actions |
-| 📱 Telegram alerts | Sends results directly to Telegram |
+- 🔄 Multi-site job scraping (e-estekhdam, Jobvision)
+- 🧠 Hybrid NLP matching (TF-IDF + Sentence Embeddings)
+- 🎯 Dual scoring system (Technical + General tracks)
+- 🏷️ Automatic job categorization
+- 📊 Structured JSON + HTML reports
+- 🚨 Outlier detection for exceptional matches
+- ⏰ Fully automated execution (every 6 hours)
+- 📱 Telegram notifications
 
 ---
 
-## 🧠 System Architecture
+## 🏗️ System Architecture
 
-### 1. Data Collection Layer
-- Selenium-based dynamic scraping
-- Supports multiple job portals
-- Full pagination crawling per category
+### 1. Data Collection
+- Selenium-based web scraping
+- Multi-page crawling support
+- Job portal extensible design
 
-### 2. NLP Processing Layer
+### 2. NLP Engine
 - TF-IDF similarity scoring
-- Sentence Transformers embeddings
+- Sentence Transformers:
   - `paraphrase-multilingual-MiniLM-L12-v2`
 - Keyword-based skill detection
 
-### 3. Dual-Track Scoring System
+### 3. Scoring System
 
-#### 🔧 Technical Track
+#### 🔧 Technical Score
 - Programming (Python, C++, etc.)
 - AI / Machine Learning
 - IoT / Embedded Systems
 - DevOps / Networking
 - Data Analysis
 
-#### 🧾 General Track
-- Office tools (Excel, Word, etc.)
+#### 🧾 General Score
+- Office tools (Excel, Word)
+- Communication skills
 - Management & coordination
-- Communication & support
 - Documentation & reporting
 
 ---
 
-### 4. Final Scoring Engine
+### 📌 Final Score Formula
 
 ```text
 Final Score =
-(Technical Score × 0.7) +
-(General Score × 0.3) +
+(Technical × 0.7) +
+(General × 0.3) +
 Boost - Penalty
-````
-
----
-
-### 5. Outlier Detection System
-
-* Adaptive **Z-Score + Percentile hybrid method**
-* Automatic skewness detection
-* Smart fallback for non-normal distributions
-
----
-
-## 📂 Project Structure
-
-```
+🚨 Outlier Detection Engine
+Adaptive hybrid model:
+Z-Score (distribution-aware)
+Percentile ranking (robust fallback)
+Automatic skewness detection
+Smart switching between statistical methods
 job-scraper/
-├── config/                 # Configuration & resume
+│
+├── config/
 │   ├── resume.py
 │   └── settings.py
 │
-├── matcher/                # Core engine
+├── matcher/
 │   ├── score_calculator.py
 │   ├── semantic_matcher.py
 │   └── skill_groups.py
 │
-├── scrapers/              # Job scrapers
+├── scrapers/
 │   ├── e_estekhdam_scraper.py
 │   └── jobvision_scraper.py
 │
-├── report/                # Report generator
+├── report/
 │   └── html_generator.py
 │
-├── utils/                 # Utilities
+├── utils/
 │   └── driver.py
 │
 ├── main.py
 ├── requirements.txt
-└── .github/workflows/
-    └── job-matcher.yml
-```
-
----
-
-## ⚙️ Configuration
-
-### `config/settings.py`
-
-```python
+└── .github/workflows/job-matcher.yml
+⚙️ Configuration
+scoring weights
 SCORE_WEIGHTS = {
     "tfidf": 0.30,
     "embedding": 0.70
@@ -136,93 +118,49 @@ FILTERS = {
     "min_score": 20,
     "top_n_results": 25
 }
-```
+📊 Outputs
+📦 JSON Output
 
----
+Each job contains:
 
-### `config/resume.py`
-
-Your resume is stored as plain text for easy modification.
-
----
-
-## 📊 Outputs
-
-### JSON Output
-
-Includes:
-
-* Final score breakdown
-* Job category
-* Matched skills
-* Outlier score
-
-### HTML Report
-
-* Ranked job cards
-* Technical / General separation
-* Skill highlights
-* Outlier indicators
-* Visual grouping
-
----
-
-## 🚀 How to Run
-
-### Install dependencies
-
-```bash
+Final score
+Category (Technical / General / Hybrid)
+Matched skills
+Outlier score
+Full metadata
+🌐 HTML Report
+Ranked job cards
+Category separation
+Skill highlights
+Outlier indicators
+Clean dashboard-style UI
+🚀 Getting Started
+1. Install dependencies
 pip install -r requirements.txt
-```
-
-### Run manually
-
-```bash
+2. Run manually
 python main.py
-```
+3. Automation (GitHub Actions)
+Runs every 6 hours
+Sends results via Telegram
+Fully hands-free pipeline
+🧰 Tech Stack
+Layer	Technology
+Language	Python 3.11
+Scraping	Selenium
+NLP	Sentence Transformers
+ML / Stats	Scikit-learn
+Math	NumPy
+CI/CD	GitHub Actions
+Messaging	Telegram API
+📈 Version History
+Version	Description
+v6.3	Dual-track scoring system
+v6.2	Hybrid outlier detection
+v6.1	Multi-intent scoring
+v6.0	Modular architecture refactor
+👤 Author
 
-### Automation
+Ali Eisapour Sharabiani
 
-Runs every 6 hours via GitHub Actions and sends results to Telegram.
-
----
-
-## 🔧 Requirements
-
-* Python 3.11+
-* Chrome (Selenium)
-* Internet connection
-
----
-
-## 🧪 Tech Stack
-
-| Technology            | Purpose              |
-| --------------------- | -------------------- |
-| Python                | Core logic           |
-| Selenium              | Web scraping         |
-| Sentence Transformers | NLP embeddings       |
-| Scikit-learn          | TF-IDF + stats       |
-| NumPy                 | Numerical operations |
-| GitHub Actions        | Automation           |
-| Telegram API          | Notifications        |
-
----
-
-## 📈 Version History
-
-| Version | Changes                                         |
-| ------- | ----------------------------------------------- |
-| v6.3    | Dual-track + improved scoring system            |
-| v6.2    | Hybrid outlier detection (Z-Score + Percentile) |
-| v6.1    | Multi-intent scoring                            |
-| v6.0    | Full modular refactor                           |
-
----
-
-## 👤 Author
-
-**Ali Eisapour Sharabiani**
-Software Engineer | Python | AI / Computer Vision | Embedded Systems
-
-```
+Software Engineer
+Python | AI | Computer Vision | Embedded Systems
