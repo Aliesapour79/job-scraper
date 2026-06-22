@@ -2,11 +2,28 @@ import json
 from datetime import datetime
 import os
 import time
-from job_matcher_core import *
-from html_generator import generate_html_report
-from semantic_matcher import SemanticMatcher, combine_scores
-from config import SCORE_WEIGHTS, EMBEDDING_MODEL, FILTERS
-from jobvision_scraper import JobvisionScraper
+
+# ==========================================
+# ایمپورت‌های جدید از ساختار ماژولار
+# ==========================================
+from config import (
+    SCORE_WEIGHTS,
+    EMBEDDING_MODEL,
+    FILTERS,
+    RESUME_TEXT
+)
+from matcher import (
+    calculate_final_score_v63,
+    calculate_keyword_score,
+    semantic_match_score,
+    calculate_outlier_score,
+    extract_all_jobs,
+    setup_driver
+)
+from scrapers import JobvisionScraper
+from report import generate_html_report
+from matcher.semantic_matcher import SemanticMatcher, combine_scores
+
 
 def main():
     # ایجاد پوشه خروجی
