@@ -1,207 +1,227 @@
-# 🎯 Job Matcher Engine v6.3 (Personal AI System)
+## 📝 **نسخه جدید `README.md` (انگلیسی)**
 
-A personal intelligent job matching system that scrapes job listings, analyzes them using hybrid scoring (TF-IDF + Semantic Embeddings), and ranks them based on relevance to a personal resume.
+```markdown
+# 🎯 AI Job Matcher - Reverse ATS
 
-This project is built as a **personal decision-support tool**, not a production SaaS product.
+[![GitHub Actions](https://github.com/Aliesapour79/job-scraper/actions/workflows/job-matcher.yml/badge.svg)](https://github.com/Aliesapour79/job-scraper/actions)
+[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
----
-
-# ⚙️ Core Idea
-
-Automatically:
-
-- Scrape job listings from a job portal
-- Extract structured job data (title, company, description, requirements)
-- Match jobs against a personal resume profile
-- Rank jobs based on relevance
-- Provide explainable scoring + visualization
+**An intelligent automated system for matching job listings with your resume.**
 
 ---
 
-# 🧠 System Architecture
+## 🎯 **What is it?**
 
-## 1. Data Collection Layer
-- Selenium-based web scraping
-- Extract job postings from target site
+**AI Job Matcher** is a personal tool that:
+- 🔍 Scrapes job listings from **multiple job portals**
+- 🧠 Matches them with your resume using **AI & NLP**
+- 📊 Ranks the best opportunities
+- 📧 Sends **automated reports** to you
 
----
-
-## 2. Feature Engineering Layer
-
-### 🔤 Keyword Matching
-- Domain-specific keyword detection
-- Weighted keyword scoring
-
-### 📊 TF-IDF Similarity
-- Text similarity between resume and job descriptions
-
-### 🧠 Semantic Embedding
-- SentenceTransformer model:
-  - `paraphrase-multilingual-MiniLM-L12-v2`
-- Computes semantic similarity between resume and job postings
+This is built as a **personal decision-support tool**, not a commercial SaaS product.
 
 ---
 
-## 3. Dual-Track Scoring System
+## ✨ **Features**
 
-### 🔧 Technical Track
-Covers:
-- Programming
-- AI / ML
-- Electronics
-- IoT
-- Networking
-- Data analysis
-
-### 🧾 General Track
-Covers:
-- Office work
-- Communication
-- Reporting
-- Excel / Word / administrative tasks
+| Feature | Description |
+|---------|-------------|
+| 🔄 **Multi-Site Scraping** | Supports e-estekhdam & Jobvision (extensible) |
+| 🧠 **Smart Matching** | Hybrid TF-IDF + Embedding + Semantic Matching |
+| 🎯 **Dual-Track Scoring** | Separate scoring for Technical & Administrative jobs |
+| 🏷️ **Auto Categorization** | Detects Technical / Administrative / Hybrid |
+| 📊 **Professional Reporting** | HTML + JSON output with full analysis |
+| 🤖 **Outlier Detection** | Identifies outstanding and unusual job matches |
+| ⏰ **Automated Execution** | Runs every 6 hours on GitHub Actions |
+| 📱 **Telegram Notifications** | Auto-sends results to your Telegram |
 
 ---
 
-## 4. Hybrid Classification
+## 🧠 **System Architecture**
 
-Jobs are categorized into:
+### 1. **Data Collection Layer**
+- Uses **Selenium** for dynamic site scraping
+- Supports: `e-estekhdam` and `Jobvision`
+- Scrapes **all pages** within a job category
 
-- Technical
-- Administrative
-- Hybrid
+### 2. **NLP Processing Layer**
+- **TF-IDF Similarity**: Text similarity between resume and job
+- **Semantic Embedding**: Uses `paraphrase-multilingual-MiniLM-L12-v2`
+- **Keyword Matching**: Domain-specific keyword detection
 
-Used for ranking + visualization.
+### 3. **Dual-Track Scoring System**
 
----
+#### 🔧 **Technical Track**
+- Programming (Python, C++, ...)
+- AI & Machine Learning
+- IoT & Electronics
+- Networking & DevOps
+- Data Analysis
 
-## 5. Scoring Engine
+#### 🧾 **General Track**
+- Office Skills (Word, Excel, ...)
+- Management & Coordination
+- Reporting & Documentation
+- Communication & Support
 
-Final score includes:
+### 4. **Final Scoring Engine**
 
-- TF-IDF similarity
-- Embedding similarity
-- Boost factors (skill reinforcement)
-- Penalty system (generic/noisy jobs)
-- Category adjustments
+```
+Final Score = (Technical Score × 0.7) + (General Score × 0.3)
+             + Boost - Penalty
+```
 
----
-
-## 6. Outlier Detection
-
-Used to detect:
-
-- Unusual job matches
-- Distribution anomalies
-
-(Not used for ranking decisions)
-
----
-
-# 📦 Configuration (`config.py`)
-
-- `SCORE_WEIGHTS` → TF-IDF vs Embedding balance
-- `TECH_KEYWORDS_MAP` → technical domains
-- `ADMIN_KEYWORDS_WEIGHTED` → office/general skills
-- `FILTERS` → thresholds & filtering rules
-- `EMBEDDING_MODEL` → model selection
+### 5. **Advanced Outlier Detection**
+- Hybrid **Z-Score + Percentile** method
+- Auto-detects **Skewness** in data distribution
+- Intelligently chooses calculation method based on data
 
 ---
 
-# 📊 Outputs
+## 📂 **Project Structure**
 
-## JSON Output
-Includes:
-- final score
-- category
-- skill matches
-- boosts / penalties
-
-## HTML Report
-Includes:
-- ranked job cards
-- category separation
-- skill visualization
-- score breakdown
-- outlier indicators
-- group analysis bars
-
----
-
-# 🧪 Scoring Breakdown
-
-Each job has:
-
-- Technical Score
-- General Score
-- Embedding Score
-- TF-IDF Score
-- Boost Score
-- Penalty Score
-- Final Score
-
----
-
-# 🧩 Key Features
-
-- Dual-track scoring (Technical / General)
-- Hybrid job detection
-- Multilingual semantic matching
-- Explainable ranking system
-- Outlier analytics
-- Rich HTML reporting
-- Fully modular pipeline
+```
+job-scraper/
+├── config/                         # Settings & Resume
+│   ├── __init__.py
+│   ├── resume.py                   # Your resume (separate from code)
+│   └── settings.py                 # Weights & filters
+│
+├── matcher/                        # Core matching engine
+│   ├── __init__.py
+│   ├── score_calculator.py         # Score calculation
+│   ├── semantic_matcher.py         # Embedding model
+│   └── skill_groups.py             # Skill groups
+│
+├── report/                         # Report generation
+│   ├── __init__.py
+│   └── html_generator.py           # HTML output
+│
+├── scrapers/                       # Site-specific scrapers
+│   ├── __init__.py
+│   ├── e_estekhdam_scraper.py      # e-estekhdam scraper
+│   └── jobvision_scraper.py        # Jobvision scraper
+│
+├── utils/                          # Shared utilities
+│   ├── __init__.py
+│   └── driver.py                   # Browser management
+│
+├── main.py                         # Main entry point
+├── requirements.txt                # Dependencies
+├── .github/
+│   └── workflows/
+│       └── job-matcher.yml         # Auto-run on GitHub Actions
+└── README.md
+```
 
 ---
 
-# 📁 Project Structure
-main.py → Orchestration pipeline
-semantic_matcher.py → Embedding + similarity engine
-html_generator.py → HTML report generator
-config.py → System configuration
-job_matcher_core.py → Scraping + scoring logic
+## ⚙️ **Configuration**
 
+### `config/settings.py`
 
+```python
+# Hybrid weights
+SCORE_WEIGHTS = {
+    'tfidf': 0.30,      # 30% TF-IDF
+    'embedding': 0.70   # 70% Embedding
+}
 
----
+# Domain weights
+INTENT_WEIGHTS = {
+    'technical': 0.70,
+    'general': 0.30
+}
 
-# 🚀 Workflow
+# Filters
+FILTERS = {
+    'min_score': 20,
+    'top_n_results': 25
+}
+```
 
-1. Scrape job listings
-2. Extract structured data
-3. Compute:
-   - TF-IDF similarity
-   - Embedding similarity
-4. Apply dual-track scoring
-5. Classify jobs
-6. Apply boosts & penalties
-7. Rank results
-8. Export JSON + HTML
+### `config/resume.py`
 
----
-
-# 🎯 Design Philosophy
-
-This system is:
-
-- Personal AI assistant for job discovery
-- Hybrid NLP ranking engine
-- Explainable scoring system
-
-Not optimized for scale — optimized for **accuracy + interpretability**.
+Your resume is stored as plain text, easy to edit and update.
 
 ---
 
-# ⚠️ Notes
+## 📊 **Outputs**
 
-- Embedding model is optional (fallback supported)
-- Outlier score is analytical only
-- Heavily configurable via `config.py`
-- Tuned for a single resume context
+### 1. **JSON Output**
+Complete data for each job:
+- Final score with breakdown
+- Job category
+- Matched skills
+- Outlier score
+
+### 2. **HTML Report**
+A clean, interactive report with:
+- Ranked job cards
+- Separate sections (Technical / Admin / Hybrid)
+- Skill visualization
+- Outlier indicators
+- Group analysis bars
 
 ---
 
-# 👤 Author
+## 🚀 **How to Run**
 
-Personal AI system for intelligent job matching and analysis.
+### 1. **Install Dependencies**
 
-Version: v6.3 (Dual Track + Hybrid Scoring)
+```bash
+pip install -r requirements.txt
+```
+
+### 2. **Run Manually**
+
+```bash
+python main.py
+```
+
+### 3. **Automated Run (GitHub Actions)**
+
+The system is configured to run **every 6 hours** and send results to Telegram.
+
+---
+
+## 🔧 **Requirements**
+
+- Python 3.11+
+- Chrome Browser (for Selenium)
+- Internet connection
+
+---
+
+## 🧪 **Tech Stack**
+
+| Technology | Purpose |
+|------------|---------|
+| **Python** | Core language |
+| **Selenium** | Web scraping |
+| **Sentence Transformers** | Embedding models |
+| **Scikit-learn** | TF-IDF & statistics |
+| **NumPy** | Numerical computation |
+| **GitHub Actions** | Automation |
+| **Telegram API** | Notifications |
+
+---
+
+## 📈 **Version History**
+
+| Version | Changes |
+|---------|---------|
+| **v6.3** | Dual-Track + Hybrid Scoring System |
+| **v6.2** | Improved Outlier Detection (Hybrid Z-Score + Percentile) |
+| **v6.1** | Added Multi-Intent Scoring |
+| **v6.0** | Complete modular architecture refactor |
+
+---
+
+## 👤 **Author**
+
+**Ali Eisapour Sharabiani**  
+Software Engineer | Python Developer | AI / Computer Vision | IoT & Embedded Systems
+
+---
