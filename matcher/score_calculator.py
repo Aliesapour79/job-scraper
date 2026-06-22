@@ -285,30 +285,52 @@ def semantic_match_score(job_text, resume_text, skill_keywords):
 
 def calculate_outlier_score(scores_list, current_score):
     """
-    محاسبه‌ی امتیاز outlier با استفاده از CDF نرمال
+    محاسبه‌ی امتیاز outlier با استفاده از ترکیب Z-Score و Percentile
+    - اگر داده‌ها نرمال باشند: ترکیب Z-Score + Percentile
+    - اگر داده‌ها چوله (Skewed) باشند: فقط Percentile
     """
+    import numpy as np
+    
+    # اگر تعداد داده‌ها کم باشد، مقدار پیش‌فرض برگردان
     if len(scores_list) < 5:
         return 50
     
-    mean = np.mean(scores_list)
-    std = np.std(scores_list)
+    scores = np.array(scores_list)
     
-    if std == 0:
-        return 50
+    # ====== Percentile واقعی (مقاوم) ======
+    percentile = (np.sum(scores <= current_score) / len(scores)) * 100
     
-    z_score = (current_score - mean) / std
+    # ====== بررسی چولگی (Skewness) داده‌ها ======
+    mean_val = np.mean(scores)
+    median_val = np.median(scores)
+    std_val = np.std(scores) + 1e-8  # جلوگیری از تقسیم بر صفر
+    skewness = abs((mean_val - median_val) / std_val)
     
-    try:
-        from scipy.stats import norm
-        percentile = norm.cdf(z_score) * 100
-        return int(min(100, max(0, percentile)))
-    except ImportError:
-        if z_score >= 0:
-            percentile = 50 + (z_score * 34)
-        else:
-            percentile = 50 + (z_score * 34)
-        return int(min(100, max(0, percentile)))
-
+    # ====== اگر داده‌ها نرمال هستند (Skewness کم) ======
+    if skewness < 0.5:
+        # محاسبه Z-Score
+        z = (current_score - mean_val) / std_val
+        
+        try:
+            from scipy.stats import norm
+            z_percentile = norm.cdf(z) * 100
+        except ImportError:
+            # اگر scipy نصب نبود، از روش تقریبی استفاده کن
+            if z >= 0:
+                z_percentile = 50 + (z * 34)
+            else:
+                z_percentile = 50 + (z * 34)
+        
+        # ترکیب Z-Score و Percentile (۵۰-۵۰)
+        final = (z_percentile * 0.5) + (percentile * 0.5)
+    
+    # ====== اگر داده‌ها چوله هستند ======
+    else:
+        # فقط از Percentile استفاده کن (مقاوم‌تر)
+        final = percentile
+    
+    # محدود کردن به بازه ۰-۱۰۰
+    return int(np.clip(final, 0, 100))
 # ==========================================
 # CALCULATE KEYWORD SCORE
 # ==========================================
