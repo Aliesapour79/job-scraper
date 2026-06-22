@@ -1,3 +1,4 @@
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -15,12 +16,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import warnings
 from webdriver_manager.chrome import ChromeDriverManager
-
+from utils import setup_driver
 # ==========================================
-# توابع جدید: Penalty, Boost, General Score
+# ایمپورت‌های جدید از ساختار ماژولار
 # ==========================================
-
-from config import GENERIC_KEYWORDS, TECH_KEYWORDS_MAP, ADMIN_KEYWORDS_WEIGHTED
+from config import RESUME_TEXT
+from config.settings import GENERIC_KEYWORDS, TECH_KEYWORDS_MAP, ADMIN_KEYWORDS_WEIGHTED
+from .skill_groups import SKILL_GROUPS, JOB_TITLE_WEIGHT_MAP
 
 def generic_penalty(job_text):
     """
@@ -247,224 +249,11 @@ warnings.filterwarnings('ignore')
 
 
 # ==========================================
-# SKILL GROUPS (UPDATED)
-# ==========================================
-SKILL_GROUPS = {
-    "iot_embedded": {
-        "keywords": ["esp32", "mqtt", "arduino", "can bus", "raspberry pi", "modbus", 
-                     "اینترنت اشیاء", "سیستم‌های نهفته", "embedded", "iot", "اینترنت اشیا"],
-        "base_weight": 10,
-        "bonus_per_match": 2,
-        "min_matches_for_bonus": 2
-    },
-    "hardware_electronics": {
-        "keywords": ["الکترونیک", "طراحی مدار", "pcb", "altium", "میکروکنترلر", 
-                     "سنسور", "شبیه‌سازی", "کنترل", "power", "analog", "digital"],
-        "base_weight": 10,
-        "bonus_per_match": 2.0,
-        "min_matches_for_bonus": 2
-    },
-    "ai_computer_vision": {
-        "keywords": ["هوش مصنوعی", "machine learning", "یادگیری ماشین", "پردازش تصویر", 
-                     "opencv", "deep learning", "yolo", "cnn", "tensorflow", "pytorch",
-                     "بینایی ماشین", "طبقه‌بندی", "تشخیص", "computer vision"],
-        "base_weight": 9,
-        "bonus_per_match": 2.0,
-        "min_matches_for_bonus": 2
-    },
-    "programming": {
-        "keywords": ["python", "c++", "جاوا", "javascript", "برنامه‌نویسی", "کدنویسی",
-                     "api", "rest", "flask", "django", "fastapi", "backend"],
-        "base_weight": 7,
-        "bonus_per_match": 1,
-        "min_matches_for_bonus": 3
-    },
-    "data_analytics": {
-        "keywords": ["تحلیل داده", "داده‌کاوی", "sql", "mongodb", "mysql", "postgresql",
-                     "pandas", "numpy", "power bi", "tableau", "etl", "data analysis"],
-        "base_weight": 6,
-        "bonus_per_match": 1.5,
-        "min_matches_for_bonus": 2
-    },
-    "networking_sysadmin": {
-        "keywords": ["network", "شبکه", "tcp/ip", "dns", "linux", "لینوکس", "سرور",
-                     "nginx", "apache", "docker", "kubernetes", "cloud", "azure", "aws"],
-        "base_weight": 5,
-        "bonus_per_match": 1,
-        "min_matches_for_bonus": 3
-    },
-    "industrial_automation": {
-        "keywords": ["صنعتی", "تولیدی", "کارخانه", "اتوماسیون", "رباتیک", "ابزار دقیق",
-                     "پایش", "مانیتورینگ", "plc", "scada", "hmi", "turbine", "موتور"],
-        "base_weight": 5,
-        "bonus_per_match": 1,
-        "min_matches_for_bonus": 2
-    },
-    "office_administration": {
-        "keywords": [
-            "اداری", "منشی", "دفتر", "پشتیبانی", "حضور و غیاب", "مدیریت زمان",
-            "word", "excel", "powerpoint", "outlook", "آفیس", "مکاتبات",
-            "بایگانی", "نامه‌نگاری", "مدارک", "هماهنگی", "گزارش‌نویسی",
-            "دبیرخانه", "مدیریت اسناد", "تنظیم قرارداد", "پیگیری",
-            "کارمند", "کارمندی", "پذیرش", "دفترداری", "امور اداری"
-        ],
-        "base_weight": 4,
-        "bonus_per_match": 0.5,
-        "min_matches_for_bonus": 3
-    },
-    "general": {
-        "keywords": ["word", "excel", "مدیریت زمان", "الگوریتم", "git", 
-                     "مستندسازی", "تیم‌ورزی", "ارتباط موثر", "مدیریت پروژه",
-                     "تحلیل", "گزارش", "مکاتبه", "پشتیبانی"],
-        "base_weight": 4,
-        "bonus_per_match": 0.8,
-        "min_matches_for_bonus": 4
-    }
-}
-
-# ==========================================
-# JOB TITLE KEYWORDS FOR DYNAMIC WEIGHT (UPDATED)
-# ==========================================
-JOB_TITLE_WEIGHT_MAP = {
-    "iot": ["iot_embedded", "hardware_electronics", "industrial_automation"],
-    "اینترنت اشیاء": ["iot_embedded", "hardware_electronics", "industrial_automation"],
-    "embedded": ["iot_embedded", "hardware_electronics", "programming"],
-    "سیستم‌های نهفته": ["iot_embedded", "hardware_electronics", "programming"],
-    "هوش مصنوعی": ["ai_computer_vision", "data_analytics", "programming"],
-    "machine learning": ["ai_computer_vision", "data_analytics", "programming"],
-    "پردازش تصویر": ["ai_computer_vision", "programming", "data_analytics"],
-    "بینایی ماشین": ["ai_computer_vision", "programming", "data_analytics"],
-    "data analyst": ["data_analytics", "programming", "ai_computer_vision"],
-    "تحلیل داده": ["data_analytics", "programming", "ai_computer_vision"],
-    "برنامه‌نویس": ["programming", "ai_computer_vision", "data_analytics"],
-    "developer": ["programming", "ai_computer_vision", "data_analytics"],
-    "full stack": ["programming", "data_analytics", "networking_sysadmin"],
-    "backend": ["programming", "data_analytics", "networking_sysadmin"],
-    "devops": ["networking_sysadmin", "programming", "data_analytics"],
-    "network": ["networking_sysadmin", "iot_embedded", "general"],
-    "الکترونیک": ["hardware_electronics", "iot_embedded", "industrial_automation"],
-    "رباتیک": ["industrial_automation", "hardware_electronics", "ai_computer_vision"],
-    "اتوماسیون": ["industrial_automation", "iot_embedded", "hardware_electronics"],
-    # ========== گروه‌های اداری ==========
-    "اداری": ["office_administration", "general"],
-    "منشی": ["office_administration", "general"],
-    "کارمند": ["office_administration", "general"],
-    "پشتیبانی": ["office_administration", "general"],
-    "مکاتبات": ["office_administration", "general"],
-    "گزارش‌نویسی": ["office_administration", "general", "data_analytics"],
-    "دفتر": ["office_administration", "general"],
-    "پذیرش": ["office_administration", "general"],
-    "امور اداری": ["office_administration", "general"],
-    "کارمندی": ["office_administration", "general"]
-}
-
-# ==========================================
-# SETUP DRIVER
-# ==========================================
-def setup_driver():
-    """Setup Chrome driver with automatic driver management"""
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option('useAutomationExtension', False)
-    
-    try:
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
-        print("✅ Chrome driver started successfully!")
-        return driver
-    except Exception as e:
-        print(f"❌ Error setting up Chrome driver: {e}")
-        print("   Trying fallback method...")
-        
-        try:
-            if platform.system() == 'Windows':
-                chrome_driver_path = r"C:\chromedriver\chromedriver.exe"
-            else:
-                chrome_driver_path = "/usr/local/bin/chromedriver"
-            
-            service = Service(chrome_driver_path)
-            driver = webdriver.Chrome(service=service, options=options)
-            print("✅ Chrome driver started with fallback!")
-            return driver
-        except:
-            print("❌ Could not start Chrome driver. Please check installation.")
-            raise
-
-# ==========================================
-# EXTRACT JOB DETAILS
-# ==========================================
-def extract_job_details(driver, url):
-    """Extract full job details with multiple fallback selectors"""
-    try:
-        driver.get(url)
-        time.sleep(5)
-        
-        full_text = driver.find_element(By.TAG_NAME, "body").text
-        
-        selectors = {
-            "title": [
-                ".entry-title h1", "h1.entry-title span", 
-                ".job-title h1", "h1[itemprop='title']",
-                ".page-header h1"
-            ],
-            "description": [
-                ".job-content p:first-child", 
-                ".job-description p",
-                "[itemprop='description']",
-                ".content p"
-            ],
-            "requirements": [
-                "//h2[contains(text(), 'شرایط احراز')]/following-sibling::ul",
-                "//h3[contains(text(), 'مهارت‌ها')]/following-sibling::ul",
-                "//h2[contains(text(), 'نیازمندی‌ها')]/following-sibling::ul",
-                "//div[contains(@class, 'requirements')]//ul"
-            ]
-        }
-        
-        sections = {}
-        for key, selector_list in selectors.items():
-            for selector in selector_list:
-                try:
-                    if selector.startswith("//"):
-                        elem = driver.find_element(By.XPATH, selector)
-                    else:
-                        elem = driver.find_element(By.CSS_SELECTOR, selector)
-                    sections[key] = elem.text.strip()
-                    break
-                except:
-                    continue
-            if key not in sections:
-                sections[key] = ""
-        
-        try:
-            location = driver.find_element(By.CSS_SELECTOR, ".job-content .text-center h5")
-            sections["location"] = location.text.strip()
-        except:
-            sections["location"] = ""
-        
-        sections["full_text"] = full_text
-        sections["combined"] = f"""
-TITLE_SECTION: {sections.get('title', '')}
-DESCRIPTION_SECTION: {sections.get('description', '')}
-REQUIREMENTS_SECTION: {sections.get('requirements', '')}
-LOCATION_SECTION: {sections.get('location', '')}
-FULL_TEXT: {full_text}
-"""
-        
-        return sections
-        
-    except Exception as e:
-        print(f"  Error extracting job details: {e}")
-        return {}
-
-# ==========================================
 # LEVEL 3: SEMANTIC MATCHING WITH TF-IDF
 # ==========================================
+
+
+
 def semantic_match_score(job_text, resume_text, skill_keywords):
     """محاسبه‌ی شباهت معنایی با TF-IDF و Cosine Similarity"""
     if not job_text or not resume_text:
@@ -491,6 +280,8 @@ def semantic_match_score(job_text, resume_text, skill_keywords):
     except Exception as e:
         print(f"  ⚠️ TF-IDF Error: {e}")
         return 0
+
+
 
 def calculate_outlier_score(scores_list, current_score):
     """
@@ -629,66 +420,3 @@ def calculate_match_score_advanced(sections, job_title="", all_scores=None):
         outlier_score = calculate_outlier_score(all_scores, final_score)
     
     return final_score, matched_keywords, group_results, semantic_score, outlier_score
-
-# ==========================================
-# EXTRACT ALL JOBS
-# ==========================================
-def extract_all_jobs(driver, url):
-    print("Loading page...")
-    driver.get(url)
-    
-    wait = WebDriverWait(driver, 20)
-    wait.until(EC.presence_of_element_located((By.CLASS_NAME, "search-list")))
-    
-    for i in range(3):
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
-        driver.execute_script("window.scrollTo(0, 0);")
-        time.sleep(1)
-    
-    job_links = driver.find_elements(By.CSS_SELECTOR, ".search-list .item a.item-content")
-    print(f"✅ Found {len(job_links)} job links")
-    
-    jobs_data = []
-    main_window = driver.current_window_handle
-    
-    for idx, link in enumerate(job_links, 1):
-        try:
-            print(f"Processing job {idx}/{len(job_links)}...")
-            
-            link_text = link.text.strip()
-            lines = link_text.split('\n')
-            title = lines[0] if lines else f"Job {idx}"
-            company = lines[1] if len(lines) > 1 else "Unknown"
-            href = link.get_attribute('href')
-            
-            if not href:
-                continue
-            
-            driver.execute_script("window.open('');")
-            driver.switch_to.window(driver.window_handles[1])
-            
-            sections = extract_job_details(driver, href)
-            
-            driver.close()
-            driver.switch_to.window(main_window)
-            time.sleep(0.5)
-            
-            if sections:
-                jobs_data.append({
-                    "title": title,
-                    "company": company,
-                    "url": href,
-                    "sections": sections,
-                    "index": idx
-                })
-                print(f"  ✅ Extracted: {title[:30]}...")
-            
-        except Exception as e:
-            print(f"  ❌ Error: {str(e)[:100]}")
-            if len(driver.window_handles) > 1:
-                driver.close()
-                driver.switch_to.window(main_window)
-            continue
-    
-    return jobs_data

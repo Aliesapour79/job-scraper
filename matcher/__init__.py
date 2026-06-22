@@ -17,6 +17,11 @@ from .score_calculator import (
     calculate_match_score_advanced
 )
 
+# ==========================================
+# توابع اسکرپر (از scrapers وارد می‌شوند)
+# ==========================================
+from scrapers import extract_all_jobs
+
 __all__ = [
     'SKILL_GROUPS',
     'JOB_TITLE_WEIGHT_MAP',
@@ -29,5 +34,6 @@ __all__ = [
     'semantic_match_score',
     'calculate_outlier_score',
     'calculate_keyword_score',
-    'calculate_match_score_advanced'
+    'calculate_match_score_advanced',
+    'extract_all_jobs',  # اضافه شد
 ]

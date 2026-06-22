@@ -17,13 +17,12 @@ from matcher import (
     calculate_keyword_score,
     semantic_match_score,
     calculate_outlier_score,
-    extract_all_jobs,
-    setup_driver
+    extract_all_jobs
 )
 from scrapers import JobvisionScraper
 from report import generate_html_report
 from matcher.semantic_matcher import SemanticMatcher, combine_scores
-
+from utils import setup_driver
 
 def main():
     # ایجاد پوشه خروجی
