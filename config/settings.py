@@ -91,9 +91,9 @@ HEADLESS = True  # اجرای بدون مرورگر
 # ==========================================
 # آدرس‌های هدف
 # ==========================================
-SEARCH_URLS = [
-    "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%B4%D9%87%D8%B1-%D9%82%D8%AF%D8%B3"
-]
+# SEARCH_URLS = [
+#     "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%B4%D9%87%D8%B1-%D9%82%D8%AF%D8%B3"
+# ]
 
 # ==========================================
 # فیلترها

@@ -11,7 +11,6 @@ from .settings import (
     ADMIN_KEYWORDS_WEIGHTED,
     INTENT_WEIGHTS,
     HEADLESS,
-    SEARCH_URLS,
     FILTERS,
     OUTPUT_DIR
 )
@@ -26,7 +25,6 @@ __all__ = [
     'ADMIN_KEYWORDS_WEIGHTED',
     'INTENT_WEIGHTS',
     'HEADLESS',
-    'SEARCH_URLS',
     'FILTERS',
     'OUTPUT_DIR',
     'RESUME_TEXT'
