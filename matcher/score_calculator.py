@@ -284,52 +284,45 @@ def semantic_match_score(job_text, resume_text, skill_keywords):
 
 
 def calculate_outlier_score(scores_list, current_score):
-    """
-    محاسبه‌ی امتیاز outlier با استفاده از ترکیب Z-Score و Percentile
-    - اگر داده‌ها نرمال باشند: ترکیب Z-Score + Percentile
-    - اگر داده‌ها چوله (Skewed) باشند: فقط Percentile
-    """
     import numpy as np
     
-    # اگر تعداد داده‌ها کم باشد، مقدار پیش‌فرض برگردان
     if len(scores_list) < 5:
         return 50
     
     scores = np.array(scores_list)
     
-    # ====== Percentile واقعی (مقاوم) ======
-    percentile = (np.sum(scores <= current_score) / len(scores)) * 100
+    # Percentile robust
+    percentile = (
+        (np.sum(scores < current_score) + 0.5 * np.sum(scores == current_score))
+        / len(scores)
+    ) * 100
     
-    # ====== بررسی چولگی (Skewness) داده‌ها ======
     mean_val = np.mean(scores)
-    median_val = np.median(scores)
-    std_val = np.std(scores) + 1e-8  # جلوگیری از تقسیم بر صفر
-    skewness = abs((mean_val - median_val) / std_val)
+    std_val = np.std(scores) + 1e-8
     
-    # ====== اگر داده‌ها نرمال هستند (Skewness کم) ======
+    # skewness واقعی‌تر (fallback safe)
+    try:
+        from scipy.stats import skew
+        skewness = abs(skew(scores))
+    except:
+        skewness = abs((mean_val - np.median(scores)) / std_val)
+    
     if skewness < 0.5:
-        # محاسبه Z-Score
         z = (current_score - mean_val) / std_val
         
         try:
             from scipy.stats import norm
             z_percentile = norm.cdf(z) * 100
-        except ImportError:
-            # اگر scipy نصب نبود، از روش تقریبی استفاده کن
-            if z >= 0:
-                z_percentile = 50 + (z * 34)
-            else:
-                z_percentile = 50 + (z * 34)
+        except:
+            z_percentile = max(0, min(100, 50 + z * 34))
         
-        # ترکیب Z-Score و Percentile (۵۰-۵۰)
-        final = (z_percentile * 0.5) + (percentile * 0.5)
-    
-    # ====== اگر داده‌ها چوله هستند ======
+        weight_z = max(0, 1 - skewness)
+        weight_p = 1 - weight_z
+        
+        final = z_percentile * weight_z + percentile * weight_p
     else:
-        # فقط از Percentile استفاده کن (مقاوم‌تر)
         final = percentile
     
-    # محدود کردن به بازه ۰-۱۰۰
     return int(np.clip(final, 0, 100))
 # ==========================================
 # CALCULATE KEYWORD SCORE
