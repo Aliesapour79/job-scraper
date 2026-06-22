@@ -4,6 +4,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
+import re
 
 class JobvisionScraper:
     def __init__(self, driver):
@@ -15,9 +16,13 @@ class JobvisionScraper:
         cards = []
         
         # صبر برای بارگذاری کارت‌ها
-        WebDriverWait(self.driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, 'a.desktop-job-card'))
-        )
+        try:
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'a.desktop-job-card'))
+            )
+        except:
+            print("  ⚠️ No job cards found on this page")
+            return cards
         
         job_elements = self.driver.find_elements(By.CSS_SELECTOR, 'a.desktop-job-card')
         
@@ -76,6 +81,54 @@ class JobvisionScraper:
                 continue
         
         return cards
+    
+    def extract_all_pages(self, max_pages=None):
+        """
+        استخراج آگهی‌ها از تمام صفحات
+        
+        Args:
+            max_pages: حداکثر تعداد صفحات (اگر None باشه، تا آخرین صفحه میرود)
+        
+        Returns:
+            list: لیست تمام آگهی‌ها
+        """
+        all_cards = []
+        page_num = 1
+        
+        print(f"  🔄 Starting multi-page scraping...")
+        
+        while True:
+            print(f"  📄 Scraping page {page_num}...")
+            
+            # استخراج کارت‌های صفحه فعلی
+            cards = self.extract_job_cards()
+            
+            if not cards:
+                print(f"     ⚠️ No jobs found on page {page_num}")
+                break
+                
+            all_cards.extend(cards)
+            print(f"     ✅ Found {len(cards)} jobs on page {page_num}")
+            
+            # اگر به حداکثر صفحات رسیدیم، بایست
+            if max_pages and page_num >= max_pages:
+                print(f"     ⏹️ Reached max pages ({max_pages})")
+                break
+            
+            # پیدا کردن لینک صفحه بعدی
+            next_url = self.get_next_page_url()
+            if not next_url:
+                print(f"     ⏹️ No more pages")
+                break
+            
+            # رفتن به صفحه بعدی
+            print(f"     ➡️ Going to page {page_num + 1}...")
+            self.driver.get(next_url)
+            time.sleep(2)
+            page_num += 1
+        
+        print(f"  ✅ Total: {len(all_cards)} jobs from {page_num} pages")
+        return all_cards
     
     def extract_job_detail(self, url):
         """استخراج جزئیات یک آگهی از جاب‌ویژن"""
@@ -154,18 +207,46 @@ class JobvisionScraper:
             return detail
     
     def get_next_page_url(self):
-        """دریافت URL صفحه بعدی"""
+        """
+        دریافت URL صفحه بعدی از جاب‌ویژن
+        با پشتیبانی از دو حالت:
+        1. لینک "بعدی" در صفحه‌بندی
+        2. ساخت دستی URL با افزایش شماره صفحه
+        """
         try:
-            # پیدا کردن لینک صفحه بعدی
+            # ====== روش اول: پیدا کردن لینک "بعدی" ======
             next_links = self.driver.find_elements(
                 By.CSS_SELECTOR, 
                 'li.page-item a'
             )
             for link in next_links:
-                if 'بعدی' in link.text or 'Next' in link.text:
+                if 'بعدی' in link.text:
                     href = link.get_attribute('href')
                     if href and href != '#':
                         return href
-        except:
-            pass
-        return None
+            
+            # ====== روش دوم: ساخت دستی URL ======
+            current_url = self.driver.current_url
+            
+            # اگر page= در URL وجود داره
+            if 'page=' in current_url:
+                match = re.search(r'page=(\d+)', current_url)
+                if match:
+                    current_page = int(match.group(1))
+                    next_page = current_page + 1
+                    # جایگزینی شماره صفحه
+                    next_url = re.sub(r'page=\d+', f'page={next_page}', current_url)
+                    return next_url
+                else:
+                    # اگر page= وجود داشت ولی عدد پیدا نشد
+                    return current_url + '&page=2'
+            else:
+                # اگر page= وجود نداشت
+                if '?' in current_url:
+                    return current_url + '&page=2'
+                else:
+                    return current_url + '?page=2'
+                    
+        except Exception as e:
+            print(f"  ⚠️ Error getting next page URL: {e}")
+            return None

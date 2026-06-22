@@ -6,7 +6,7 @@ from job_matcher_core import *
 from html_generator import generate_html_report
 from semantic_matcher import SemanticMatcher, combine_scores
 from config import SCORE_WEIGHTS, EMBEDDING_MODEL, FILTERS
-from jobvision_scraper import JobvisionScraper  # اضافه شد
+from jobvision_scraper import JobvisionScraper
 
 def main():
     # ایجاد پوشه خروجی
@@ -14,7 +14,7 @@ def main():
     
     print("=" * 80)
     print("🚀 JOB MATCHER v6.3 - DUAL TRACK + HYBRID SCORING")
-    print("   (Multi-Site Support: e-estekhdam + Jobvision)")
+    print("   (Multi-Site Support: e-estekhdam + Jobvision - All Pages)")
     print("=" * 80)
     
     # ==========================================
@@ -39,7 +39,8 @@ def main():
         {
             'name': 'jobvision',
             'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
-            'type': 'jobvision'
+            'type': 'jobvision',
+            'max_pages': 3  # None = همه صفحات, یا عدد مثل 3 برای تست
         }
     ]
     
@@ -60,13 +61,26 @@ def main():
             time.sleep(3)
             
             if site['type'] == 'jobvision':
-                # ====== اسکرپر جاب‌ویژن ======
+                # ====== اسکرپر جاب‌ویژن (همه صفحات) ======
                 scraper = JobvisionScraper(driver)
-                jobs = scraper.extract_job_cards()
+                
+                # استخراج از همه صفحات
+                max_pages = site.get('max_pages', None)
+                jobs = scraper.extract_all_pages(max_pages=max_pages)
+                
+                if not jobs:
+                    print(f"⚠️ No jobs found in {site['name']}")
+                    continue
                 
                 # استخراج جزئیات برای هر آگهی
+                print(f"  🔍 Extracting details for {len(jobs)} jobs...")
+                print(f"  ⏱️ This may take a few minutes...")
+                
                 for i, job in enumerate(jobs, 1):
-                    print(f"  🔍 Extracting detail {i}/{len(jobs)}...")
+                    # نمایش پیشرفت هر ۱۰ تا
+                    if i % 10 == 0 or i == 1:
+                        print(f"     Progress: {i}/{len(jobs)}")
+                    
                     detail = scraper.extract_job_detail(job['url'])
                     
                     # ترکیب اطلاعات
@@ -117,6 +131,7 @@ def main():
         # محاسبه Batch Embedding (برای سرعت بیشتر)
         embedding_scores = []
         if semantic_matcher.is_loaded:
+            print("  🧠 Calculating embeddings for all jobs...")
             embedding_scores = semantic_matcher.calculate_batch_similarity(
                 job_texts, 
                 RESUME_TEXT
@@ -127,6 +142,7 @@ def main():
         # ==========================================
         # مرحله ۱: محاسبه همه امتیازها
         # ==========================================
+        print("  📊 Calculating scores for all jobs...")
         all_tfidf_scores = []
         all_embedding_scores = []
         all_job_texts = []
@@ -206,12 +222,13 @@ def main():
             
             all_scores.append(final_score)
             
-            # نمایش category در لاگ
-            category_icon = "🔧" if category == "technical" else "🧾" if category == "administrative" else "🔀"
-            site_name = job_data.get('site', 'unknown')
-            print(f"  📊 [{site_name}] Job {idx+1}: {category_icon} {category.upper()} | "
-                  f"Technical={technical_score}% | General={general_score}% | "
-                  f"Boost={boost}% | Penalty={penalty}% | Final={final_score}%")
+            # نمایش category در لاگ (فقط برای ۲۰ تا اول و آخر)
+            if idx < 20 or idx >= len(all_job_data) - 5:
+                category_icon = "🔧" if category == "technical" else "🧾" if category == "administrative" else "🔀"
+                site_name = job_data.get('site', 'unknown')
+                print(f"  📊 [{site_name}] Job {idx+1}: {category_icon} {category.upper()} | "
+                      f"Technical={technical_score}% | General={general_score}% | "
+                      f"Boost={boost}% | Penalty={penalty}% | Final={final_score}%")
             
             # ذخیره نتایج
             results.append({
@@ -237,6 +254,7 @@ def main():
         # ==========================================
         # محاسبه Outlier Score (با CDF اصلاح شده)
         # ==========================================
+        print("  📊 Calculating outlier scores...")
         for result in results:
             result['outlier_score'] = calculate_outlier_score(all_scores, result['score'])
         
@@ -282,8 +300,15 @@ def main():
         admin_count = sum(1 for r in filtered_results if r.get('category') == 'administrative')
         hybrid_count = sum(1 for r in filtered_results if r.get('category') == 'hybrid')
         
-        print(f"🎯 Found {len(filtered_results)} relevant jobs out of {len(all_jobs)}")
+        print(f"🎯 Found {len(filtered_results)} relevant jobs out of {len(all_jobs)} total")
         print(f"   🔧 Technical: {tech_count} | 🧾 Admin: {admin_count} | 🔀 Hybrid: {hybrid_count}")
+        
+        # آمار بر اساس سایت
+        site_stats = {}
+        for r in filtered_results:
+            site = r.get('site', 'unknown')
+            site_stats[site] = site_stats.get(site, 0) + 1
+        print(f"   📍 By site: {site_stats}")
         print("=" * 80)
         
         if filtered_results:
