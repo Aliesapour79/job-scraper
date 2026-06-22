@@ -1,20 +1,20 @@
 import json
 from datetime import datetime
 import os
+import time
 from job_matcher_core import *
 from html_generator import generate_html_report
 from semantic_matcher import SemanticMatcher, combine_scores
 from config import SCORE_WEIGHTS, EMBEDDING_MODEL, FILTERS
+from jobvision_scraper import JobvisionScraper  # اضافه شد
 
 def main():
     # ایجاد پوشه خروجی
     os.makedirs("output", exist_ok=True)
     
-    url = "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%B4%D9%87%D8%B1-%D9%82%D8%AF%D8%B3"
-    
     print("=" * 80)
     print("🚀 JOB MATCHER v6.3 - DUAL TRACK + HYBRID SCORING")
-    print("   (Technical Track + Admin Track + Hybrid Jobs)")
+    print("   (Multi-Site Support: e-estekhdam + Jobvision)")
     print("=" * 80)
     
     # ==========================================
@@ -28,17 +28,75 @@ def main():
         print("   Run: pip install sentence-transformers")
     
     # ==========================================
+    # تنظیمات سایت‌ها
+    # ==========================================
+    sites_config = [
+        {
+            'name': 'e-estekhdam',
+            'url': "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%B4%D9%87%D8%B1-%D9%82%D8%AF%D8%B3",
+            'type': 'default'
+        },
+        {
+            'name': 'jobvision',
+            'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
+            'type': 'jobvision'
+        }
+    ]
+    
+    # ==========================================
     # Web Scraping
     # ==========================================
     driver = setup_driver()
+    all_jobs = []
+    
     try:
-        jobs = extract_all_jobs(driver, url)
+        for site in sites_config:
+            print(f"\n{'='*60}")
+            print(f"🔄 Scraping {site['name']}...")
+            print(f"   URL: {site['url']}")
+            print(f"{'='*60}")
+            
+            driver.get(site['url'])
+            time.sleep(3)
+            
+            if site['type'] == 'jobvision':
+                # ====== اسکرپر جاب‌ویژن ======
+                scraper = JobvisionScraper(driver)
+                jobs = scraper.extract_job_cards()
+                
+                # استخراج جزئیات برای هر آگهی
+                for i, job in enumerate(jobs, 1):
+                    print(f"  🔍 Extracting detail {i}/{len(jobs)}...")
+                    detail = scraper.extract_job_detail(job['url'])
+                    
+                    # ترکیب اطلاعات
+                    job['sections'] = {
+                        'full_text': detail.get('full_text', ''),
+                        'title': job.get('title', ''),
+                        'description': detail.get('description', ''),
+                        'requirements': detail.get('requirements', ''),
+                        'company': job.get('company', '')
+                    }
+                    
+                    # اضافه کردن مهارت‌ها برای نمایش
+                    job['skills'] = detail.get('skills', [])
+                    
+                    # اضافه کردن به لیست
+                    all_jobs.append(job)
+                
+                print(f"✅ Extracted {len(jobs)} jobs from {site['name']}")
+                
+            else:
+                # ====== اسکرپر پیش‌فرض (e-estekhdam) ======
+                jobs = extract_all_jobs(driver, site['url'])
+                all_jobs.extend(jobs)
+                print(f"✅ Extracted {len(jobs)} jobs from {site['name']}")
         
-        if not jobs:
+        if not all_jobs:
             print("❌ No jobs found!")
             return
         
-        print(f"\n✅ Extracted {len(jobs)} jobs!")
+        print(f"\n✅ Total: {len(all_jobs)} jobs extracted from all sites!")
         print("🔄 Calculating dual-track match scores...\n")
         
         results = []
@@ -46,11 +104,13 @@ def main():
         
         # جمع‌آوری متن آگهی‌ها برای Batch Embedding
         job_texts = []
-        for job in jobs:
+        for job in all_jobs:
+            sections = job.get('sections', {})
             job_text = f"""
-            {job['sections'].get('title', '')}
-            {job['sections'].get('description', '')}
-            {job['sections'].get('requirements', '')}
+            {sections.get('title', '')}
+            {sections.get('description', '')}
+            {sections.get('requirements', '')}
+            {sections.get('full_text', '')}
             """
             job_texts.append(job_text)
         
@@ -62,7 +122,7 @@ def main():
                 RESUME_TEXT
             )
         else:
-            embedding_scores = [0] * len(jobs)
+            embedding_scores = [0] * len(all_jobs)
         
         # ==========================================
         # مرحله ۱: محاسبه همه امتیازها
@@ -76,20 +136,22 @@ def main():
         all_group_results = []
         all_job_data = []
         
-        for idx, job in enumerate(jobs):
+        for idx, job in enumerate(all_jobs):
+            sections = job.get('sections', {})
+            
             # Keyword Score (برای نمایش در گزارش)
             keyword_score, matched_keywords, group_results = calculate_keyword_score(
-                job['sections'].get('full_text', ''),
-                job['sections'].get('requirements', ''),
-                job['sections'].get('description', ''),
-                job['sections'].get('title', '') or job['title']
+                sections.get('full_text', ''),
+                sections.get('requirements', ''),
+                sections.get('description', ''),
+                sections.get('title', '') or job.get('title', '')
             )
             
             # TF-IDF Score
             combined_job_text = f"""
-            {job['sections'].get('title', '')}
-            {job['sections'].get('description', '')}
-            {job['sections'].get('requirements', '')}
+            {sections.get('title', '')}
+            {sections.get('description', '')}
+            {sections.get('requirements', '')}
             """
             tfidf_score = semantic_match_score(combined_job_text, RESUME_TEXT, matched_keywords)
             
@@ -97,7 +159,7 @@ def main():
             embedding_score = embedding_scores[idx] if idx < len(embedding_scores) else 0
             
             # عنوان شغلی برای Context-Aware
-            job_title = job['title']
+            job_title = job.get('title', '')
             
             # ذخیره برای مرحله بعد
             all_job_texts.append(combined_job_text)
@@ -108,10 +170,11 @@ def main():
             all_matched_keywords.append(matched_keywords)
             all_group_results.append(group_results)
             all_job_data.append({
-                "title": job['title'],
-                "company": job['company'],
-                "url": job['url'],
-                "sections": job['sections'],
+                "title": job_title,
+                "company": job.get('company', ''),
+                "url": job.get('url', ''),
+                "sections": sections,
+                "site": job.get('site', 'unknown'),
                 "index": idx
             })
         
@@ -145,7 +208,8 @@ def main():
             
             # نمایش category در لاگ
             category_icon = "🔧" if category == "technical" else "🧾" if category == "administrative" else "🔀"
-            print(f"  📊 Job {idx+1}: {category_icon} {category.upper()} | "
+            site_name = job_data.get('site', 'unknown')
+            print(f"  📊 [{site_name}] Job {idx+1}: {category_icon} {category.upper()} | "
                   f"Technical={technical_score}% | General={general_score}% | "
                   f"Boost={boost}% | Penalty={penalty}% | Final={final_score}%")
             
@@ -154,6 +218,7 @@ def main():
                 "title": job_data['title'],
                 "company": job_data['company'],
                 "url": job_data['url'],
+                "site": job_data.get('site', 'unknown'),
                 "keyword_score": all_keyword_scores[idx],
                 "tfidf_score": int(all_tfidf_scores[idx]),
                 "embedding_score": int(all_embedding_scores[idx]),
@@ -162,7 +227,7 @@ def main():
                 "score": final_score,
                 "penalty": penalty,
                 "boost": boost,
-                "category": category,  # جدید: دسته‌بندی شغل
+                "category": category,
                 "matched_skills": all_matched_keywords[idx],
                 "group_analysis": all_group_results[idx],
                 "description_preview": job_data['sections'].get('description', '')[:300],
@@ -189,7 +254,7 @@ def main():
         
         # اضافه کردن آگهی‌های اداری (حتی با امتیاز پایین) با برچسب ویژه
         for admin_job in admin_jobs:
-            admin_job['is_admin_safety'] = True  # برای نمایش در HTML
+            admin_job['is_admin_safety'] = True
             filtered_results.append(admin_job)
         
         # مرتب‌سازی بر اساس امتیاز
@@ -217,17 +282,18 @@ def main():
         admin_count = sum(1 for r in filtered_results if r.get('category') == 'administrative')
         hybrid_count = sum(1 for r in filtered_results if r.get('category') == 'hybrid')
         
-        print(f"🎯 Found {len(filtered_results)} relevant jobs out of {len(jobs)}")
+        print(f"🎯 Found {len(filtered_results)} relevant jobs out of {len(all_jobs)}")
         print(f"   🔧 Technical: {tech_count} | 🧾 Admin: {admin_count} | 🔀 Hybrid: {hybrid_count}")
         print("=" * 80)
         
         if filtered_results:
-            print("\n🏆 TOP 5 MATCHING JOBS:\n")
-            for i, job in enumerate(filtered_results[:5], 1):
+            print("\n🏆 TOP 10 MATCHING JOBS:\n")
+            for i, job in enumerate(filtered_results[:10], 1):
                 category_icon = "🔧" if job.get('category') == 'technical' else "🧾" if job.get('category') == 'administrative' else "🔀"
+                site_tag = f"[{job.get('site', 'unknown')}]"
                 safety_tag = " 🛡️" if job.get('is_admin_safety') else ""
                 
-                print(f"{i}. {category_icon} [{job['score']}%] {job['title']}{safety_tag}")
+                print(f"{i}. {category_icon} {site_tag} {job['score']}% - {job['title']}{safety_tag}")
                 print(f"   🏢 {job['company']}")
                 print(f"   🎯 Technical: {job.get('technical_score', 0)}% | 📋 General: {job.get('general_score', 0)}%")
                 print(f"   📊 Embedding: {job['embedding_score']}% | TF-IDF: {job['tfidf_score']}%")

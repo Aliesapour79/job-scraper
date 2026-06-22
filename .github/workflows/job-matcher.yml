@@ -7,7 +7,7 @@ on:
 
 jobs:
   job-matcher:
-    name: Match Jobs with Resume
+    name: Match Jobs with Resume (Multi-Site)
     runs-on: ubuntu-latest
     
     steps:
@@ -48,7 +48,7 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
       
-      - name: Run job matcher
+      - name: Run job matcher (Multi-Site)
         run: |
           python main.py
       
@@ -77,7 +77,7 @@ jobs:
                   for f in files:
                       with open(f, "rb") as file:
                           now = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
-                          caption = f"📊 گزارش تطبیق شغلی v6.3 (Multi-Intent + Weighted General) - {now}"
+                          caption = f"📊 گزارش تطبیق شغلی v6.3 (Multi-Site: e-estekhdam + Jobvision) - {now}"
                           requests.post(
                               f"https://api.telegram.org/bot{TOKEN}/sendDocument",
                               data={"chat_id": CHAT_ID, "caption": caption},
@@ -101,7 +101,7 @@ jobs:
           CHAT_ID = "'"${{ secrets.TELEGRAM_CHAT_ID }}"'"
           if TOKEN != "" and CHAT_ID != "":
               now = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
-              msg = f"❌ تطبیق شغلی v6.3 (Multi-Intent) در تاریخ {now} با خطا مواجه شد!"
+              msg = f"❌ تطبیق شغلی v6.3 (Multi-Site) در تاریخ {now} با خطا مواجه شد!"
               requests.post(
                   f"https://api.telegram.org/bot{TOKEN}/sendMessage",
                   data={"chat_id": CHAT_ID, "text": msg}
