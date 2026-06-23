@@ -49,14 +49,14 @@ def main():
     sites_config = [
         {
             'name': 'e-estekhdam',
-            'url': "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%B4%D9%87%D8%B1-%D9%82%D8%AF%D8%B3",
+            'url': "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%AA%D9%87%D8%B1%D8%A7%D9%86",
             'type': 'default'
         },
         {
             'name': 'jobvision',
             'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
             'type': 'jobvision',
-            'max_pages': 3  # None = همه صفحات, یا عدد مثل 3 برای تست
+            'max_pages': None  # None = همه صفحات, یا عدد مثل 3 برای تست
         }
     ]
     
