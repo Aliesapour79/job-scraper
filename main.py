@@ -46,18 +46,18 @@ def main():
     # تنظیمات سایت‌ها
     # =========================
     sites_config = [
-        {
-            'name': 'e-estekhdam',
-            'url': "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%AA%D9%87%D8%B1%D8%A7%D9%86",
-            'type': 'default'
-        },
-        {
-            'name': 'jobvision',
-            'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
-            'type': 'jobvision',
-            'max_pages': None
-        }
-    ]
+    {
+        'name': 'e-estekhdam',
+        'url': "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%AA%D9%87%D8%B1%D8%A7%D9%86",
+        'type': 'default'
+    },
+    {
+        'name': 'jobvision',
+        'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
+        'type': 'jobvision',
+        'max_pages': None  # None = همه صفحات (برای اجرای هفتگی)
+    }
+]
 
     driver = setup_driver()
     all_jobs = []
@@ -73,12 +73,13 @@ def main():
             time.sleep(3)
 
             # ==========================================
-            # JOBVISION SCRAPER
+            # JOBVISION SCRAPER (نسخه مقاوم)
             # ==========================================
             if site['type'] == 'jobvision':
                 scraper = JobvisionScraper(driver)
                 max_pages = site.get('max_pages', None)
 
+                # استخراج همه صفحات با مدیریت خطا
                 jobs = scraper.extract_all_pages(max_pages=max_pages)
 
                 if not jobs:
@@ -95,17 +96,6 @@ def main():
                     # نمایش پیشرفت هر ۵۰ تا
                     if i % 50 == 0 or i == 1:
                         print(f"     Progress: {i}/{len(jobs)} (Success: {successful}, Failed: {failed})")
-
-                    # ==========================================
-                    # 🔄 ریستارت مرورگر هر ۲۰۰ درخواست
-                    # ==========================================
-                    if i % 200 == 0 and i > 1:
-                        print(f"     🔄 Restarting browser at {i}/{len(jobs)} to free memory...")
-                        driver.quit()
-                        driver = setup_driver()
-                        driver.get(site['url'])
-                        time.sleep(3)
-                        scraper = JobvisionScraper(driver)
 
                     try:
                         # تنظیم timeout برای هر صفحه
@@ -282,19 +272,19 @@ def main():
         # ذخیره نتایج
         # =========================
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        json_path = f"output/job_matches_v7_{timestamp}.json"
-        with open(json_path, "w", encoding="utf-8") as f:
+        json_file = f"output/job_matches_{timestamp}.json"
+        with open(json_file, "w", encoding="utf-8") as f:
             json.dump(filtered_results, f, ensure_ascii=False, indent=2)
 
-        html_path = f"output/job_report_v7_{timestamp}.html"
-        generate_html_report(filtered_results, html_path)
+        html_file = f"output/job_report_{timestamp}.html"
+        generate_html_report(filtered_results, html_file)
 
         # =========================
         # نمایش نتایج
         # =========================
         print("=" * 80)
-        print(f"📁 JSON saved: {json_path}")
-        print(f"📄 HTML saved: {html_path}")
+        print(f"📁 JSON saved: {json_file}")
+        print(f"📄 HTML saved: {html_file}")
 
         # آمار
         tech_count = sum(1 for r in filtered_results if r.get('category') == 'technical')
