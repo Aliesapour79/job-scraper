@@ -1,3 +1,4 @@
+from collections import deque
 import json
 from datetime import datetime
 import os
@@ -29,7 +30,7 @@ def main():
     os.makedirs("output", exist_ok=True)
 
     print("=" * 80)
-    print("🚀 JOB MATCHER v7 - RESILIENT MODE")
+    print("🚀 JOB MATCHER v7 - RESILIENT MODE (Signal-Based)")
     print("   (Weekly Full-Run: e-estekhdam + Jobvision All Pages)")
     print("=" * 80)
 
@@ -46,18 +47,18 @@ def main():
     # تنظیمات سایت‌ها
     # =========================
     sites_config = [
-    {
-        'name': 'e-estekhdam',
-        'url': "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%AA%D9%87%D8%B1%D8%A7%D9%86",
-        'type': 'default'
-    },
-    {
-        'name': 'jobvision',
-        'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
-        'type': 'jobvision',
-        'max_pages': None  # None = همه صفحات (برای اجرای هفتگی)
-    }
-]
+        {
+            'name': 'e-estekhdam',
+            'url': "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%AA%D9%87%D8%B1%D8%A7%D9%86",
+            'type': 'default'
+        },
+        {
+            'name': 'jobvision',
+            'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
+            'type': 'jobvision',
+            'max_pages': None  # None = همه صفحات (برای اجرای هفتگی)
+        }
+    ]
 
     driver = setup_driver()
     all_jobs = []
@@ -73,13 +74,11 @@ def main():
             time.sleep(3)
 
             # ==========================================
-            # JOBVISION SCRAPER (نسخه مقاوم)
+            # JOBVISION SCRAPER (نسخه Signal-Based)
             # ==========================================
             if site['type'] == 'jobvision':
                 scraper = JobvisionScraper(driver)
                 max_pages = site.get('max_pages', None)
-
-                # استخراج همه صفحات با مدیریت خطا
                 jobs = scraper.extract_all_pages(max_pages=max_pages)
 
                 if not jobs:
@@ -89,6 +88,17 @@ def main():
                 print(f"  🔍 Extracting details for {len(jobs)} jobs...")
                 print(f"  ⏱️ This may take a while (~45-60 min for 886 jobs)...")
 
+                # =========================
+                # SIGNAL SYSTEM
+                # =========================
+                consecutive_timeouts = 0
+                consecutive_failures = 0
+                slow_requests = 0
+
+                failure_window = deque(maxlen=20)
+                last_restart_at = 0
+                min_gap = 50
+
                 successful = 0
                 failed = 0
 
@@ -97,18 +107,100 @@ def main():
                     if i % 50 == 0 or i == 1:
                         print(f"     Progress: {i}/{len(jobs)} (Success: {successful}, Failed: {failed})")
 
-                    try:
-                        # تنظیم timeout برای هر صفحه
-                        driver.set_page_load_timeout(30)
-                        detail = scraper.extract_job_detail(job['url'])
+                    # =========================
+                    # SIGNAL DECISION
+                    # =========================
+                    should_restart = False
+                    reason = ""
 
-                        # اگر خطایی در detail وجود دارد، skip کن
-                        if detail.get('error'):
+                    failure_rate = failed / i if i > 0 else 0
+
+                    # Priority 1: failure rate
+                    if i > 20 and failure_rate > 0.20:
+                        should_restart = True
+                        reason = f"high failure rate {failure_rate:.1%}"
+
+                    # Priority 2: consecutive failures
+                    elif consecutive_failures >= 5:
+                        should_restart = True
+                        reason = f"{consecutive_failures} consecutive failures"
+
+                    # Priority 3: timeout
+                    elif consecutive_timeouts >= 3:
+                        should_restart = True
+                        reason = f"{consecutive_timeouts} timeouts"
+
+                    # Priority 4: failure window
+                    elif sum(failure_window) >= 6:
+                        should_restart = True
+                        reason = "failure spike (window)"
+
+                    # Priority 5: slow requests
+                    elif slow_requests >= 5:
+                        should_restart = True
+                        reason = "too many slow requests"
+
+                    # Fallback
+                    elif i - last_restart_at >= 150:
+                        should_restart = True
+                        reason = "fallback (150 requests)"
+
+                    # =========================
+                    # RESTART
+                    # =========================
+                    if should_restart and i - last_restart_at >= min_gap:
+                        print(f"     🔄 Restart at {i} | {reason}")
+                        driver.quit()
+                        driver = setup_driver()
+                        driver.get(site['url'])
+                        time.sleep(3)
+                        scraper = JobvisionScraper(driver)
+
+                        consecutive_timeouts = 0
+                        consecutive_failures = 0
+                        slow_requests = 0
+                        failure_window.clear()
+                        last_restart_at = i
+
+                    # =========================
+                    # REQUEST
+                    # =========================
+                    try:
+                        driver.set_page_load_timeout(30)
+
+                        start = time.time()
+                        detail = scraper.extract_job_detail(job['url'])
+                        load_time = time.time() - start
+
+                        is_slow = load_time > 10
+                        is_error = detail.get('error') is not None
+
+                        # update signals
+                        if is_slow:
+                            slow_requests += 1
+                        else:
+                            slow_requests = max(0, slow_requests - 1)
+
+                        if is_error:
                             failed += 1
+                            consecutive_failures += 1
+                            failure_window.append(1)
                             job['error'] = detail['error']
                             continue
+                        else:
+                            successful += 1
+                            consecutive_failures = 0
+                            failure_window.append(0)
 
-                        # ترکیب اطلاعات
+                        # timeout detection
+                        if load_time > 30:
+                            consecutive_timeouts += 1
+                        else:
+                            consecutive_timeouts = 0
+
+                        # =========================
+                        # SAVE JOB
+                        # =========================
                         job['sections'] = {
                             'full_text': detail.get('full_text', ''),
                             'title': job.get('title', ''),
@@ -121,15 +213,18 @@ def main():
                         job['error'] = None
 
                         all_jobs.append(job)
-                        successful += 1
 
                     except Exception as e:
                         failed += 1
-                        job['error'] = str(e)
-                        print(f"     ❌ Error on job {i}: {str(e)[:80]}")
+                        consecutive_failures += 1
+                        failure_window.append(1)
+
+                        if "timeout" in str(e).lower():
+                            consecutive_timeouts += 1
+
+                        print(f"     ❌ Error: {str(e)[:80]}")
 
                     finally:
-                        # تأخیر تصادفی بین ۲-۴ ثانیه
                         time.sleep(random.uniform(2, 4))
 
                     # اگر بیش از ۳۰٪ خطا داشتیم، متوقف شو
@@ -163,24 +258,15 @@ def main():
         # =========================
         job_texts = []
         for job in all_jobs:
-            sections = job.get('sections', {})
-            text = f"""
-            {sections.get('title', '')}
-            {sections.get('description', '')}
-            {sections.get('requirements', '')}
-            {sections.get('full_text', '')}
-            """
-            job_texts.append(text)
+            s = job.get('sections', {})
+            job_texts.append(f"{s.get('title','')} {s.get('description','')} {s.get('requirements','')} {s.get('full_text','')}")
 
         # =========================
         # محاسبه Embedding (Batch)
         # =========================
         print("  🧠 Calculating embeddings...")
         if semantic_matcher.is_loaded:
-            embedding_scores = semantic_matcher.calculate_batch_similarity(
-                job_texts,
-                RESUME_TEXT
-            )
+            embedding_scores = semantic_matcher.calculate_batch_similarity(job_texts, RESUME_TEXT)
         else:
             embedding_scores = [0] * len(all_jobs)
 
@@ -190,76 +276,64 @@ def main():
         print("  📊 Calculating scores...")
         results = []
         all_scores = []
-        all_tfidf_scores = []
+        all_tfidf = []
 
-        for idx, job in enumerate(all_jobs):
-            sections = job.get('sections', {})
+        for i, job in enumerate(all_jobs):
+            s = job.get('sections', {})
 
-            # Keyword Score
-            keyword_score, matched_keywords, group_results = calculate_keyword_score(
-                sections.get('full_text', ''),
-                sections.get('requirements', ''),
-                sections.get('description', ''),
-                sections.get('title', '') or job.get('title', '')
+            keyword_score, matched, group_results = calculate_keyword_score(
+                s.get('full_text', ''),
+                s.get('requirements', ''),
+                s.get('description', ''),
+                s.get('title', '') or job.get('title', '')
             )
 
-            # TF-IDF Score
-            combined_job_text = f"""
-            {sections.get('title', '')}
-            {sections.get('description', '')}
-            {sections.get('requirements', '')}
-            """
-            tfidf_score = semantic_match_score(
-                combined_job_text,
+            tfidf = semantic_match_score(
+                s.get('description', ''),
                 RESUME_TEXT,
-                matched_keywords
+                matched
             )
-            all_tfidf_scores.append(tfidf_score)
+            all_tfidf.append(tfidf)
 
-            # Embedding Score
-            embedding_score = embedding_scores[idx] if idx < len(embedding_scores) else 0
+            embed = embedding_scores[i]
 
-            # امتیاز نهایی
             scores = calculate_final_score_v63(
-                idx=idx,
-                job_text=job_texts[idx],
+                idx=i,
+                job_text=job_texts[i],
                 resume_text=RESUME_TEXT,
-                embedding_score=embedding_score,
-                tfidf_score=tfidf_score,
+                embedding_score=embed,
+                tfidf_score=tfidf,
                 all_embedding_scores=embedding_scores,
-                all_tfidf_scores=all_tfidf_scores,
+                all_tfidf_scores=all_tfidf,
                 semantic_matcher=semantic_matcher,
                 job_title=job.get('title', '')
             )
 
-            final_score = scores['final']
-            all_scores.append(final_score)
+            final = scores['final']
+            all_scores.append(final)
+
+            # محاسبه outlier
+            outlier_score = calculate_outlier_score(all_scores, final)
 
             results.append({
                 "title": job.get('title', 'Unknown'),
                 "company": job.get('company', 'Unknown'),
                 "url": job.get('url', ''),
                 "site": job.get('site', 'unknown'),
-                "score": final_score,
+                "score": final,
                 "technical_score": scores.get('technical', 0),
                 "general_score": scores.get('general', 0),
-                "embedding_score": int(embedding_score),
-                "tfidf_score": int(tfidf_score),
+                "embedding_score": int(embed),
+                "tfidf_score": int(tfidf),
                 "keyword_score": keyword_score,
-                "matched_skills": matched_keywords,
+                "matched_skills": matched,
                 "category": scores.get('category', 'technical'),
                 "penalty": scores.get('penalty', 0),
                 "boost": scores.get('boost', 0),
-                "description_preview": sections.get('description', '')[:300],
+                "outlier_score": outlier_score,
+                "description_preview": s.get('description', '')[:300],
                 "error": job.get('error', None)
             })
-
-        # =========================
-        # محاسبه Outlier Score
-        # =========================
-        print("  📊 Calculating outlier scores...")
-        for r in results:
-            r['outlier_score'] = calculate_outlier_score(all_scores, r['score'])
 
         # =========================
         # فیلتر بر اساس امتیاز
@@ -272,19 +346,19 @@ def main():
         # ذخیره نتایج
         # =========================
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        json_file = f"output/job_matches_{timestamp}.json"
-        with open(json_file, "w", encoding="utf-8") as f:
+        json_path = f"output/job_matches_{timestamp}.json"
+        with open(json_path, "w", encoding="utf-8") as f:
             json.dump(filtered_results, f, ensure_ascii=False, indent=2)
 
-        html_file = f"output/job_report_{timestamp}.html"
-        generate_html_report(filtered_results, html_file)
+        html_path = f"output/job_report_{timestamp}.html"
+        generate_html_report(filtered_results, html_path)
 
         # =========================
         # نمایش نتایج
         # =========================
         print("=" * 80)
-        print(f"📁 JSON saved: {json_file}")
-        print(f"📄 HTML saved: {html_file}")
+        print(f"📁 JSON saved: {json_path}")
+        print(f"📄 HTML saved: {html_path}")
 
         # آمار
         tech_count = sum(1 for r in filtered_results if r.get('category') == 'technical')
@@ -308,9 +382,8 @@ def main():
             for i, job in enumerate(filtered_results[:10], 1):
                 category_icon = "🔧" if job.get('category') == 'technical' else "🧾" if job.get('category') == 'administrative' else "🔀"
                 site_tag = f"[{job.get('site', 'unknown')}]"
-                safety_tag = " 🛡️" if job.get('is_admin_safety') else ""
 
-                print(f"{i}. {category_icon} {site_tag} {job['score']}% - {job['title']}{safety_tag}")
+                print(f"{i}. {category_icon} {site_tag} {job['score']}% - {job['title']}")
                 print(f"   🏢 {job['company']}")
                 print(f"   🎯 Technical: {job.get('technical_score', 0)}% | 📋 General: {job.get('general_score', 0)}%")
                 print(f"   📊 Embedding: {job['embedding_score']}% | TF-IDF: {job['tfidf_score']}%")
