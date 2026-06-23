@@ -46,22 +46,18 @@ def main():
     # تنظیمات سایت‌ها
     # =========================
     sites_config = [
-        {
-            'name': 'e-estekhdam',
-            'url': "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%AA%D9%87%D8%B1%D8%A7%D9%86",
-            'type': 'default'
-        },
-        {
-            'name': 'jobvision',
-            'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
-            'type': 'jobvision',
-<<<<<<< HEAD
-            'max_pages': None  # None = همه صفحات (برای اجرای هفتگی)
-=======
-            'max_pages': None  # None = همه صفحات, یا عدد مثل 3 برای تست
->>>>>>> c0165e536188a874d2bda6700daa27489a6549b7
-        }
-    ]
+    {
+        'name': 'e-estekhdam',
+        'url': "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%AA%D9%87%D8%B1%D8%A7%D9%86",
+        'type': 'default'
+    },
+    {
+        'name': 'jobvision',
+        'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
+        'type': 'jobvision',
+        'max_pages': None  # None = همه صفحات (برای اجرای هفتگی)
+    }
+]
 
     driver = setup_driver()
     all_jobs = []
