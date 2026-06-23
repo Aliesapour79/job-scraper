@@ -29,7 +29,7 @@ def main():
     os.makedirs("output", exist_ok=True)
 
     print("=" * 80)
-    print("🚀 JOB MATCHER v6.3 - RESILIENT MODE")
+    print("🚀 JOB MATCHER v7 - RESILIENT MODE")
     print("   (Weekly Full-Run: e-estekhdam + Jobvision All Pages)")
     print("=" * 80)
 

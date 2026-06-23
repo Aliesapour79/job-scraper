@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 import os
 def generate_html_report(results, filename="job_report.html"):
-    """Generate beautiful HTML report with charts - v6.3 Dual Track"""
+    """Generate beautiful HTML report with charts - v7 Dual Track"""
     
     # محاسبه‌ی آمار با مدیریت خطا
     total_jobs = len(results)
@@ -21,7 +21,7 @@ def generate_html_report(results, filename="job_report.html"):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>گزارش تطبیق شغلی v6.3 - علی عیسی‌پور</title>
+    <title>گزارش تطبیق شغلی v7 - علی عیسی‌پور</title>
     <style>
         * {{
             margin: 0;
@@ -428,7 +428,7 @@ def generate_html_report(results, filename="job_report.html"):
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎯 گزارش تطبیق شغلی v6.3</h1>
+            <h1>🎯 گزارش تطبیق شغلی v7</h1>
             <div class="subtitle">
                 بر اساس رزومه‌ی علی عیسی‌پور شربیانی | 
                 تاریخ: {datetime.now().strftime('%Y/%m/%d %H:%M')}
@@ -725,5 +725,5 @@ if __name__ == "__main__":
         }
     ]
     
-    generate_html_report(test_results, "test_report_v63.html")
-    print("✅ گزارش تست v6.3 ایجاد شد: test_report_v63.html")
+    generate_html_report(test_results, "test_report_v7.html")
+    print("✅ گزارش تست v7 ایجاد شد: test_report_v7.html")

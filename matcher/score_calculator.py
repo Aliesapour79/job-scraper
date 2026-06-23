@@ -128,7 +128,7 @@ def min_max_normalize(scores):
     return [(x - min_val) / (max_val - min_val) for x in scores]
 
 # ==========================================
-# 🔥 v6.3: Dual Track + Hybrid Scoring
+# 🔥 v7: Dual Track + Hybrid Scoring
 # ==========================================
 
 def detect_job_category(job_title, job_text, technical_score, general_score):
@@ -172,7 +172,7 @@ def calculate_final_score_v63(idx, job_text, resume_text, embedding_score, tfidf
                               all_embedding_scores, all_tfidf_scores, semantic_matcher=None, job_title=""):
     """
     محاسبه امتیاز نهایی با سیستم Dual Track + Hybrid
-    نسخه v6.3:
+    نسخه v7:
     1. Technical Track: برای مشاغل فنی
     2. Admin Track: برای مشاغل اداری با حداقل ۳۰% نمایش
     3. Hybrid: برای مشاغل ترکیبی (پشتیبانی فنی)

@@ -215,6 +215,7 @@ python main.py
 
 | Version | Description                   |
 | ------- | ----------------------------- |
+| v7      | Multi-site resilient scraping ||
 | v6.3    | Dual-track scoring system     |
 | v6.2    | Hybrid outlier detection      |
 | v6.1    | Multi-intent scoring          |
