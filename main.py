@@ -55,7 +55,11 @@ def main():
             'name': 'jobvision',
             'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
             'type': 'jobvision',
+<<<<<<< HEAD
             'max_pages': None  # None = همه صفحات (برای اجرای هفتگی)
+=======
+            'max_pages': None  # None = همه صفحات, یا عدد مثل 3 برای تست
+>>>>>>> c0165e536188a874d2bda6700daa27489a6549b7
         }
     ]
 
