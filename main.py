@@ -346,11 +346,11 @@ def main():
         # ذخیره نتایج
         # =========================
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        json_path = f"output/job_matches_{timestamp}.json"
+        json_path = f"output/job_matches_v7_{timestamp}.json"
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(filtered_results, f, ensure_ascii=False, indent=2)
 
-        html_path = f"output/job_report_{timestamp}.html"
+        html_path = f"output/job_report_v7_{timestamp}.html"
         generate_html_report(filtered_results, html_path)
 
         # =========================
