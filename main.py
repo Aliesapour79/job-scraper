@@ -28,13 +28,12 @@ from utils import setup_driver
 # =========================
 # CONFIG (Stable Production)
 # =========================
-RESTART_EVERY = 60
-SLEEP_RANGE = (1.5, 3)
-PAGE_TIMEOUT = 45
+RESTART_EVERY = 40
+SLEEP_RANGE = (2, 4)     # افزایش
+PAGE_TIMEOUT = 60        # افزایش
 MAX_FAILURE_RATE = 0.25
 PARTIAL_SAVE_EVERY = 50
 MAX_EMPTY_PAGES = 2
-
 
 # =========================
 # DRIVER RESTART
