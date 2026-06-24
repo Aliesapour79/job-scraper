@@ -152,9 +152,16 @@ class JobvisionScraper:
         return all_cards
 
     # =========================
-    # استخراج جزئیات آگهی (نسخه مقاوم)
+    # استخراج جزئیات آگهی (نسخه مقاوم با Retry)
     # =========================
-    def extract_job_detail(self, url):
+    def extract_job_detail(self, url, retry=2):
+        """
+        استخراج جزئیات یک آگهی با Retry برای Timeout
+        
+        Args:
+            url: لینک آگهی
+            retry: تعداد تلاش مجدد در صورت Timeout (پیش‌فرض ۲)
+        """
         detail = {
             'title': '',
             'company': '',
@@ -169,68 +176,85 @@ class JobvisionScraper:
             'error': None
         }
 
-        try:
-            self.driver.set_page_load_timeout(30)
-
+        for attempt in range(retry + 1):
             try:
-                self.driver.get(url)
-            except Exception as e:
-                print(f"     ⚠️ Page load failed: {e}")
-                detail['error'] = str(e)
+                self.driver.set_page_load_timeout(30)
+
+                try:
+                    self.driver.get(url)
+                except Exception as e:
+                    # اگر Timeout بود و تلاش باقی مانده، دوباره تلاش کن
+                    if "timeout" in str(e).lower() and attempt < retry:
+                        print(f"     ⏳ Retry {attempt+1}/{retry} for {url[:50]}...")
+                        time.sleep(3)
+                        continue
+                    else:
+                        print(f"     ⚠️ Page load failed: {e}")
+                        detail['error'] = str(e)
+                        return detail
+
+                time.sleep(1.5)
+
+                # کل متن
+                body = self.driver.find_element(By.TAG_NAME, 'body')
+                detail['full_text'] = body.text
+
+                # شرح شغل
+                desc_elements = self.driver.find_elements(By.CSS_SELECTOR, 'div[dir="rtl"]')
+                for elem in desc_elements:
+                    text = elem.text.strip()
+                    if text and len(text) > 50:
+                        detail['description'] = text
+                        break
+
+                # مهارت‌ها
+                skill_tags = self.driver.find_elements(By.CSS_SELECTOR, 'app-tag')
+                skills_text = []
+
+                for tag in skill_tags:
+                    try:
+                        title = tag.find_element(By.CSS_SELECTOR, '.tag-title').text.strip()
+                        value = tag.find_element(By.CSS_SELECTOR, '.tag-value').text.strip()
+
+                        detail['skills'].append({
+                            'name': title,
+                            'level': value
+                        })
+
+                        skills_text.append(f"{title} ({value})")
+
+                    except:
+                        pass
+
+                detail['requirements'] = ' | '.join(skills_text)
+
+                # شرایط احراز
+                titles = self.driver.find_elements(By.CSS_SELECTOR, 'div.requirement-title')
+                values = self.driver.find_elements(By.CSS_SELECTOR, 'div.requirement-value')
+
+                for i, title_elem in enumerate(titles):
+                    if i < len(values):
+                        title_text = title_elem.text.strip()
+                        value_text = values[i].text.strip()
+
+                        if 'سن' in title_text:
+                            detail['age_range'] = value_text
+                        elif 'جنسیت' in title_text:
+                            detail['gender'] = value_text
+
+                # اگر به اینجا رسیدیم، موفق بوده
                 return detail
 
-            time.sleep(1.5)
-
-            # کل متن
-            body = self.driver.find_element(By.TAG_NAME, 'body')
-            detail['full_text'] = body.text
-
-            # شرح شغل
-            desc_elements = self.driver.find_elements(By.CSS_SELECTOR, 'div[dir="rtl"]')
-            for elem in desc_elements:
-                text = elem.text.strip()
-                if text and len(text) > 50:
-                    detail['description'] = text
-                    break
-
-            # مهارت‌ها
-            skill_tags = self.driver.find_elements(By.CSS_SELECTOR, 'app-tag')
-            skills_text = []
-
-            for tag in skill_tags:
-                try:
-                    title = tag.find_element(By.CSS_SELECTOR, '.tag-title').text.strip()
-                    value = tag.find_element(By.CSS_SELECTOR, '.tag-value').text.strip()
-
-                    detail['skills'].append({
-                        'name': title,
-                        'level': value
-                    })
-
-                    skills_text.append(f"{title} ({value})")
-
-                except:
-                    pass
-
-            detail['requirements'] = ' | '.join(skills_text)
-
-            # شرایط احراز
-            titles = self.driver.find_elements(By.CSS_SELECTOR, 'div.requirement-title')
-            values = self.driver.find_elements(By.CSS_SELECTOR, 'div.requirement-value')
-
-            for i, title_elem in enumerate(titles):
-                if i < len(values):
-                    title_text = title_elem.text.strip()
-                    value_text = values[i].text.strip()
-
-                    if 'سن' in title_text:
-                        detail['age_range'] = value_text
-                    elif 'جنسیت' in title_text:
-                        detail['gender'] = value_text
-
-        except Exception as e:
-            print(f"     ⚠️ Error extracting detail: {e}")
-            detail['error'] = str(e)
+            except Exception as e:
+                # اگر خطای Timeout بود و تلاش باقی مانده، ادامه بده
+                if "timeout" in str(e).lower() and attempt < retry:
+                    print(f"     ⏳ Retry {attempt+1}/{retry} for {url[:50]}...")
+                    time.sleep(3)
+                    continue
+                else:
+                    print(f"     ⚠️ Error extracting detail: {e}")
+                    detail['error'] = str(e)
+                    return detail
 
         return detail
 
