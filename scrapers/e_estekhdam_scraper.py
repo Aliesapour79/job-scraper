@@ -73,19 +73,44 @@ FULL_TEXT: {full_text}
         return {}
 
 def extract_all_jobs(driver, url):
-    """استخراج تمام آگهی‌ها از سایت e-estekhdam"""
+    """استخراج تمام آگهی‌ها از سایت e-estekhdam با اسکرول هوشمند"""
     print("Loading page...")
     driver.get(url)
     
     wait = WebDriverWait(driver, 20)
     wait.until(EC.presence_of_element_located((By.CLASS_NAME, "search-list")))
     
-    for i in range(3):
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
-        driver.execute_script("window.scrollTo(0, 0);")
-        time.sleep(1)
+    # =========================
+    # 🔄 اسکرول هوشمند تا انتهای صفحه
+    # =========================
+    print("🔄 Scrolling to load all jobs...")
     
+    last_height = driver.execute_script("return document.body.scrollHeight")
+    scroll_attempts = 0
+    max_scroll_attempts = 30
+    new_jobs_loaded = True
+    
+    while new_jobs_loaded and scroll_attempts < max_scroll_attempts:
+        # اسکرول به انتهای صفحه
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(2.5)
+        
+        # بررسی تغییر ارتفاع
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        
+        if new_height == last_height:
+            new_jobs_loaded = False
+        else:
+            scroll_attempts += 1
+            if scroll_attempts % 5 == 0:
+                print(f"     📜 Scrolled {scroll_attempts} times...")
+            last_height = new_height
+    
+    print(f"     ✅ Finished scrolling after {scroll_attempts} attempts")
+    
+    # =========================
+    # استخراج آگهی‌ها
+    # =========================
     job_links = driver.find_elements(By.CSS_SELECTOR, ".search-list .item a.item-content")
     print(f"✅ Found {len(job_links)} job links")
     
