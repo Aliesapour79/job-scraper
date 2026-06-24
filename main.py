@@ -3,9 +3,9 @@ from datetime import datetime
 import os
 import time
 import random
+import traceback
 
 from config import (
-    SCORE_WEIGHTS,
     EMBEDDING_MODEL,
     FILTERS,
     RESUME_TEXT
@@ -26,125 +26,156 @@ from utils import setup_driver
 
 
 # =========================
-# CONFIG
+# CONFIG (Stable Production)
 # =========================
-RESTART_EVERY = 120
-SLEEP_RANGE = (2, 4)
-PAGE_TIMEOUT = 25
-PARTIAL_SAVE_EVERY = 100
-MAX_FAILURE_RATE = 0.3
+RESTART_EVERY = 60
+SLEEP_RANGE = (1.5, 3)
+PAGE_TIMEOUT = 45
+MAX_FAILURE_RATE = 0.25
+PARTIAL_SAVE_EVERY = 50
+MAX_EMPTY_PAGES = 2
 
 
+# =========================
+# DRIVER RESTART
+# =========================
 def restart_driver(driver):
+    """Restart Chrome driver to free memory"""
+    print("🔄 Restarting Chrome driver...")
     try:
         driver.quit()
     except:
         pass
 
-    print("🔄 Restarting browser...")
-    driver = setup_driver()
-    return driver
+    time.sleep(2)
+    return setup_driver()
 
 
+# =========================
+# PARTIAL SAVE
+# =========================
 def save_partial(all_jobs, count):
-    """ذخیره موقت داده‌ها"""
+    """Save partial results to prevent data loss"""
     try:
+        os.makedirs("output", exist_ok=True)
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+
         with open(f"output/partial_{count}_{ts}.json", "w", encoding="utf-8") as f:
             json.dump(all_jobs, f, ensure_ascii=False, indent=2)
+
         print(f"💾 Partial save at {count}")
     except:
         pass
 
 
+# =========================
+# MAIN
+# =========================
 def main():
     os.makedirs("output", exist_ok=True)
 
     print("=" * 80)
-    print("🚀 JOB MATCHER v7 - STABLE MODE (Production Ready)")
+    print("🚀 JOB MATCHER v7 - STABLE PRODUCTION MODE")
+    print("   (Multi-Site: e-estekhdam + Jobvision)")
     print("=" * 80)
 
     # =========================
-    # Semantic Model
+    # LOAD MODEL
     # =========================
     print("\n🔄 Loading Semantic Model...")
     semantic_matcher = SemanticMatcher(EMBEDDING_MODEL)
 
     if not semantic_matcher.is_loaded:
-        print("⚠️ Semantic matching disabled")
+        print("⚠️ Semantic matching disabled (install sentence-transformers)")
 
+    # =========================
+    # SITE CONFIGURATION
+    # =========================
     sites_config = [
         {
             'name': 'e-estekhdam',
             'url': "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%AA%D9%87%D8%B1%D8%A7%D9%86",
-            'type': 'default'
+            'type': 'default',
+            'max_pages': 100
         },
         {
             'name': 'jobvision',
             'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
             'type': 'jobvision',
-            'max_pages': None
+            'max_pages': 100  # محدودیت ایمن برای جلوگیری از اجرای طولانی
         }
     ]
 
     driver = setup_driver()
     all_jobs = []
+    empty_pages_count = 0
 
     try:
         for site in sites_config:
-            print(f"\n🔄 Scraping {site['name']}")
+            print(f"\n{'='*60}")
+            print(f"🔄 Scraping {site['name']}")
+            print(f"   URL: {site['url']}")
+            print(f"{'='*60}")
 
             driver.get(site['url'])
             time.sleep(3)
 
             # =========================
-            # JOBVISION
+            # JOBVISION SCRAPER
             # =========================
             if site['type'] == 'jobvision':
                 scraper = JobvisionScraper(driver)
-                jobs = scraper.extract_all_pages(max_pages=site.get('max_pages'))
+
+                jobs = scraper.extract_all_pages(
+                    max_pages=site.get('max_pages', 100)
+                )
 
                 if not jobs:
                     print("⚠️ No jobs found")
                     continue
 
                 print(f"🔍 {len(jobs)} jobs found")
+                print("⏱️ Extracting details... (this will take ~45-60 min)")
 
                 successful = 0
                 failed = 0
-                total_processed = 0
 
                 for i, job in enumerate(jobs, 1):
-                    total_processed += 1
-
-                    # progress
-                    if i % 50 == 0 or i == 1:
-                        print(f"Progress: {i}/{len(jobs)} | OK: {successful} | Fail: {failed}")
 
                     # =========================
-                    # RESTART (ساده و پایدار)
+                    # PROGRESS
+                    # =========================
+                    if i % 50 == 0 or i == 1:
+                        print(f"     Progress: {i}/{len(jobs)} | OK: {successful} | Fail: {failed}")
+
+                    # =========================
+                    # FAILURE CONTROL
+                    # =========================
+                    if i > 20 and failed / i > MAX_FAILURE_RATE:
+                        print(f"⚠️ Failure rate too high ({failed}/{i}), stopping batch")
+                        break
+
+                    # =========================
+                    # DRIVER RESTART
                     # =========================
                     if i % RESTART_EVERY == 0:
+                        print(f"     🔄 Restart at {i}...")
                         driver = restart_driver(driver)
-                        # فقط scraper جدید کافی است (بدون driver.get(site['url']))
                         scraper = JobvisionScraper(driver)
-
-                    # =========================
-                    # FAILURE TRACKING
-                    # =========================
-                    if total_processed > 20 and failed / total_processed > MAX_FAILURE_RATE:
-                        print(f"⚠️ Too many failures ({failed}/{total_processed}), stopping...")
-                        break
+                        # بازگشت به صفحه اصلی
+                        driver.get(site['url'])
+                        time.sleep(3)
 
                     try:
                         driver.set_page_load_timeout(PAGE_TIMEOUT)
+                        driver.set_script_timeout(PAGE_TIMEOUT)
 
                         detail = scraper.extract_job_detail(job['url'])
 
                         # ====== 📌 آزادسازی حافظه ======
                         driver.get('about:blank')
 
-                        if detail.get('error'):
+                        if not detail or detail.get("error"):
                             failed += 1
                             continue
 
@@ -162,11 +193,16 @@ def main():
 
                     except Exception as e:
                         failed += 1
-                        print(f"❌ Error {i}: {str(e)[:60]}")
+                        msg = str(e).lower()
 
-                        if "timeout" in str(e).lower():
+                        print(f"     ❌ Error {i}: {msg[:80]}")
+
+                        # restart only on real chrome failure
+                        if "timeout" in msg or "crash" in msg:
                             driver = restart_driver(driver)
-                            scraper = JobvisionScraper(driver)  # ← اصلاح شد
+                            scraper = JobvisionScraper(driver)
+                            driver.get(site['url'])
+                            time.sleep(3)
 
                     finally:
                         time.sleep(random.uniform(*SLEEP_RANGE))
@@ -178,38 +214,52 @@ def main():
                         save_partial(all_jobs, i)
 
                 print(f"✅ Done: {successful} success | {failed} failed")
+                print(f"✅ Extracted {successful} jobs from {site['name']}")
 
             # =========================
-            # DEFAULT
+            # DEFAULT SCRAPER (e-estekhdam)
             # =========================
             else:
                 jobs = extract_all_jobs(driver, site['url'])
                 all_jobs.extend(jobs)
-                print(f"✅ {len(jobs)} jobs extracted")
+                print(f"✅ Extracted {len(jobs)} jobs from {site['name']}")
 
+        # =========================
+        # FINAL CHECK
+        # =========================
         if not all_jobs:
             print("❌ No jobs found")
             return
 
-        print(f"\n✅ Total jobs: {len(all_jobs)}")
+        print(f"\n✅ TOTAL JOBS EXTRACTED: {len(all_jobs)}")
+
+        # =========================
+        # PREPARE FOR SCORING
+        # =========================
+        print("\n🔄 Calculating match scores...")
+        print("   This may take a few minutes...")
+
+        job_texts = []
+        for job in all_jobs:
+            s = job.get('sections', {})
+            job_texts.append(
+                f"{s.get('title','')} {s.get('description','')} {s.get('requirements','')}"
+            )
+
+        # =========================
+        # EMBEDDINGS
+        # =========================
+        print("  🧠 Running embeddings...")
+        embedding_scores = (
+            semantic_matcher.calculate_batch_similarity(job_texts, RESUME_TEXT)
+            if semantic_matcher.is_loaded
+            else [0] * len(all_jobs)
+        )
 
         # =========================
         # SCORING
         # =========================
-        job_texts = []
-        for job in all_jobs:
-            s = job.get('sections', {})
-            job_texts.append(f"{s.get('title','')} {s.get('description','')} {s.get('requirements','')}")
-
-        print("🧠 Embeddings...")
-        if semantic_matcher.is_loaded:
-            embedding_scores = semantic_matcher.calculate_batch_similarity(
-                job_texts, RESUME_TEXT
-            )
-        else:
-            embedding_scores = [0] * len(all_jobs)
-
-        print("📊 Scoring...")
+        print("  📊 Scoring jobs...")
         results = []
         all_scores = []
         all_tfidf_scores = []
@@ -232,13 +282,11 @@ def main():
 
             all_tfidf_scores.append(tfidf_score)
 
-            embedding_score = embedding_scores[idx]
-
             scores = calculate_final_score_v63(
                 idx=idx,
                 job_text=job_texts[idx],
                 resume_text=RESUME_TEXT,
-                embedding_score=embedding_score,
+                embedding_score=embedding_scores[idx],
                 tfidf_score=tfidf_score,
                 all_embedding_scores=embedding_scores,
                 all_tfidf_scores=all_tfidf_scores,
@@ -250,49 +298,99 @@ def main():
             all_scores.append(final)
 
             results.append({
-                "title": job.get('title'),
-                "company": job.get('company'),
-                "url": job.get('url'),
+                "title": job.get('title', 'Unknown'),
+                "company": job.get('company', 'Unknown'),
+                "url": job.get('url', ''),
+                "site": job.get('site', 'unknown'),
                 "score": final,
-                "matched_skills": matched_keywords
+                "technical_score": scores.get('technical', 0),
+                "general_score": scores.get('general', 0),
+                "embedding_score": int(embedding_scores[idx]),
+                "tfidf_score": int(tfidf_score),
+                "keyword_score": keyword_score,
+                "matched_skills": matched_keywords,
+                "category": scores.get('category', 'technical'),
+                "penalty": scores.get('penalty', 0),
+                "boost": scores.get('boost', 0),
+                "description_preview": s.get('description', '')[:300],
+                "error": job.get('error', None)
             })
 
-        # outlier
+        # =========================
+        # OUTLIER DETECTION
+        # =========================
+        print("  📊 Calculating outlier scores...")
         for r in results:
             r['outlier_score'] = calculate_outlier_score(all_scores, r['score'])
 
-        # filter
-        filtered = [r for r in results if r['score'] >= FILTERS.get('min_score', 20)]
+        # =========================
+        # FILTER
+        # =========================
+        min_score = FILTERS.get('min_score', 20)
+        filtered = [r for r in results if r['score'] >= min_score]
         filtered.sort(key=lambda x: x['score'], reverse=True)
 
         # =========================
-        # SAVE
+        # SAVE OUTPUT
         # =========================
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
 
         json_file = f"output/job_matches_v7_{ts}.json"
+        html_file = f"output/job_report_v7_{ts}.html"
+
         with open(json_file, "w", encoding="utf-8") as f:
             json.dump(filtered, f, ensure_ascii=False, indent=2)
 
-        html_file = f"output/job_report_v7_{ts}.html"
         generate_html_report(filtered, html_file)
 
-        print(f"\n📁 {json_file}")
-        print(f"📄 {html_file}")
+        # =========================
+        # STATISTICS
+        # =========================
+        tech_count = sum(1 for r in filtered if r.get('category') == 'technical')
+        admin_count = sum(1 for r in filtered if r.get('category') == 'administrative')
+        hybrid_count = sum(1 for r in filtered if r.get('category') == 'hybrid')
 
-        print(f"\n🏆 TOP 10:")
-        for i, j in enumerate(filtered[:10], 1):
-            print(f"{i}. {j['score']}% - {j['title']}")
+        site_stats = {}
+        for r in filtered:
+            site = r.get('site', 'unknown')
+            site_stats[site] = site_stats.get(site, 0) + 1
+
+        print("\n" + "=" * 80)
+        print(f"📁 JSON saved: {json_file}")
+        print(f"📄 HTML saved: {html_file}")
+        print("=" * 80)
+
+        print(f"\n🎯 Found {len(filtered)} relevant jobs out of {len(all_jobs)} total")
+        print(f"   🔧 Technical: {tech_count} | 🧾 Admin: {admin_count} | 🔀 Hybrid: {hybrid_count}")
+        print(f"   📍 By site: {site_stats}")
+        print("=" * 80)
+
+        # =========================
+        # TOP 10
+        # =========================
+        if filtered:
+            print("\n🏆 TOP 10 MATCHING JOBS:\n")
+            for i, job in enumerate(filtered[:10], 1):
+                category_icon = "🔧" if job.get('category') == 'technical' else "🧾" if job.get('category') == 'administrative' else "🔀"
+                site_tag = f"[{job.get('site', 'unknown')}]"
+
+                print(f"{i}. {category_icon} {site_tag} {job['score']}% - {job['title']}")
+                print(f"   🏢 {job['company']}")
+                print(f"   🎯 Technical: {job.get('technical_score', 0)}% | 📋 General: {job.get('general_score', 0)}%")
+                print(f"   📊 Outlier: {job.get('outlier_score', 0)}%")
+                print(f"   🛠️  Skills: {', '.join(job.get('matched_skills', [])[:5])}")
+                print()
 
     except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
+        print(f"\n❌ Fatal error: {e}")
         traceback.print_exc()
 
     finally:
-        if driver:
+        try:
             driver.quit()
-            print("✅ Browser closed")
+        except:
+            pass
+        print("\n✅ Browser closed")
 
 
 if __name__ == "__main__":
