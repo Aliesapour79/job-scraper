@@ -148,19 +148,35 @@ def main():
     # SITE CONFIGURATION
     # =========================
     sites_config = [
-        {
-            'name': 'e-estekhdam',
-            'url': "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%AA%D9%87%D8%B1%D8%A7%D9%86",
-            'type': 'e_estekhdam',
-            'max_pages': 100
-        },
-        {
-            'name': 'jobvision',
-            'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
-            'type': 'jobvision',
-            'max_pages': 100
-        }
-    ]
+    {
+        'name': 'jobvision-developer',
+        'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
+        'type': 'jobvision',
+        'max_pages': 100,
+        'job_category': 'توسعه نرم افزار و برنامه نویسی'
+    },
+    {
+        'name': 'jobvision-data-science',
+        'url': "https://jobvision.ir/jobs/category/data-science-in-all-cities-of-tehran",
+        'type': 'jobvision',
+        'max_pages': 100,
+        'job_category': 'علوم داده / هوش مصنوعی'
+    },
+    {
+        'name': 'jobvision-secretary',
+        'url': "https://jobvision.ir/jobs/category/secretary-in-all-cities-of-tehran",
+        'type': 'jobvision',
+        'max_pages': 100,
+        'job_category': 'مسئول دفتر / کارمند اداری'
+    },
+    {
+        'name': 'jobvision-hr',
+        'url': "https://jobvision.ir/jobs/category/human-resources-in-all-cities-of-tehran",
+        'type': 'jobvision',
+        'max_pages': 100,
+        'job_category': 'منابع انسانی'
+    }
+]
 
     driver = setup_driver()
     all_jobs = []
