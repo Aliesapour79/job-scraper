@@ -29,11 +29,18 @@ from utils import setup_driver
 # CONFIG (Stable Production)
 # =========================
 RESTART_EVERY = 40
-SLEEP_RANGE = (2, 4)     # افزایش
-PAGE_TIMEOUT = 60        # افزایش
+SLEEP_RANGE = (2, 4)
+PAGE_TIMEOUT = 60
 MAX_FAILURE_RATE = 0.25
 PARTIAL_SAVE_EVERY = 50
 MAX_EMPTY_PAGES = 2
+
+# =========================
+# 🎯 FLAGS: کنترل بخش‌های مختلف
+# =========================
+ENABLE_PROCESSING = False   # پردازش و امتیازدهی (Embedding, TF-IDF, Scoring)
+ENABLE_OUTPUT = False       # تولید خروجی (JSON + HTML + Statistics)
+
 
 # =========================
 # DRIVER RESTART
@@ -78,14 +85,24 @@ def main():
     print("   (Multi-Site: e-estekhdam + Jobvision)")
     print("=" * 80)
 
+    # نمایش وضعیت Flagها
+    print(f"\n📋 MODE STATUS:")
+    print(f"   🧠 Processing (Scoring): {'✅ ENABLED' if ENABLE_PROCESSING else '❌ DISABLED'}")
+    print(f"   📤 Output (JSON/HTML):  {'✅ ENABLED' if ENABLE_OUTPUT else '❌ DISABLED'}")
+    print("=" * 80)
+
     # =========================
     # LOAD MODEL
     # =========================
-    print("\n🔄 Loading Semantic Model...")
-    semantic_matcher = SemanticMatcher(EMBEDDING_MODEL)
+    if ENABLE_PROCESSING:
+        print("\n🔄 Loading Semantic Model...")
+        semantic_matcher = SemanticMatcher(EMBEDDING_MODEL)
 
-    if not semantic_matcher.is_loaded:
-        print("⚠️ Semantic matching disabled (install sentence-transformers)")
+        if not semantic_matcher.is_loaded:
+            print("⚠️ Semantic matching disabled (install sentence-transformers)")
+    else:
+        print("\n⏭️ Skipping Semantic Model (Processing disabled)")
+        semantic_matcher = None
 
     # =========================
     # SITE CONFIGURATION
@@ -101,13 +118,12 @@ def main():
             'name': 'jobvision',
             'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
             'type': 'jobvision',
-            'max_pages': 100  # محدودیت ایمن برای جلوگیری از اجرای طولانی
+            'max_pages': 100
         }
     ]
 
     driver = setup_driver()
     all_jobs = []
-    empty_pages_count = 0
 
     try:
         for site in sites_config:
@@ -141,27 +157,17 @@ def main():
 
                 for i, job in enumerate(jobs, 1):
 
-                    # =========================
-                    # PROGRESS
-                    # =========================
                     if i % 50 == 0 or i == 1:
                         print(f"     Progress: {i}/{len(jobs)} | OK: {successful} | Fail: {failed}")
 
-                    # =========================
-                    # FAILURE CONTROL
-                    # =========================
                     if i > 20 and failed / i > MAX_FAILURE_RATE:
                         print(f"⚠️ Failure rate too high ({failed}/{i}), stopping batch")
                         break
 
-                    # =========================
-                    # DRIVER RESTART
-                    # =========================
                     if i % RESTART_EVERY == 0:
                         print(f"     🔄 Restart at {i}...")
                         driver = restart_driver(driver)
                         scraper = JobvisionScraper(driver)
-                        # بازگشت به صفحه اصلی
                         driver.get(site['url'])
                         time.sleep(3)
 
@@ -171,7 +177,6 @@ def main():
 
                         detail = scraper.extract_job_detail(job['url'])
 
-                        # ====== 📌 آزادسازی حافظه ======
                         driver.get('about:blank')
 
                         if not detail or detail.get("error"):
@@ -193,10 +198,8 @@ def main():
                     except Exception as e:
                         failed += 1
                         msg = str(e).lower()
-
                         print(f"     ❌ Error {i}: {msg[:80]}")
 
-                        # restart only on real chrome failure
                         if "timeout" in msg or "crash" in msg:
                             driver = restart_driver(driver)
                             scraper = JobvisionScraper(driver)
@@ -206,18 +209,12 @@ def main():
                     finally:
                         time.sleep(random.uniform(*SLEEP_RANGE))
 
-                    # =========================
-                    # PARTIAL SAVE
-                    # =========================
                     if i % PARTIAL_SAVE_EVERY == 0:
                         save_partial(all_jobs, i)
 
                 print(f"✅ Done: {successful} success | {failed} failed")
                 print(f"✅ Extracted {successful} jobs from {site['name']}")
 
-            # =========================
-            # DEFAULT SCRAPER (e-estekhdam)
-            # =========================
             else:
                 jobs = extract_all_jobs(driver, site['url'])
                 all_jobs.extend(jobs)
@@ -231,6 +228,15 @@ def main():
             return
 
         print(f"\n✅ TOTAL JOBS EXTRACTED: {len(all_jobs)}")
+
+        # =========================
+        # 🎯 SKIP PROCESSING IF DISABLED
+        # =========================
+        if not ENABLE_PROCESSING:
+            print("\n⏭️ Processing (Scoring) is DISABLED.")
+            print("   Data extracted successfully. Run with ENABLE_PROCESSING=True to score.")
+            print(f"   Extracted {len(all_jobs)} jobs ready for processing.")
+            return
 
         # =========================
         # PREPARE FOR SCORING
@@ -328,6 +334,15 @@ def main():
         min_score = FILTERS.get('min_score', 20)
         filtered = [r for r in results if r['score'] >= min_score]
         filtered.sort(key=lambda x: x['score'], reverse=True)
+
+        # =========================
+        # 🎯 SKIP OUTPUT IF DISABLED
+        # =========================
+        if not ENABLE_OUTPUT:
+            print("\n⏭️ Output (JSON/HTML) is DISABLED.")
+            print(f"   Scores calculated for {len(filtered)} relevant jobs.")
+            print("   Run with ENABLE_OUTPUT=True to generate files.")
+            return
 
         # =========================
         # SAVE OUTPUT
