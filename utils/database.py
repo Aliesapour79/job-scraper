@@ -27,7 +27,7 @@ def init_db():
     cursor = conn.cursor()
 
     # =========================
-    # جدول آگهی‌های جاب‌ویژن
+    # جدول آگهی‌ها با فیلد job_category
     # =========================
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS jobvision_jobs (
@@ -44,6 +44,7 @@ def init_db():
             skills TEXT,
             age_range TEXT,
             gender TEXT,
+            job_category TEXT,
             site TEXT DEFAULT 'jobvision',
             job_hash TEXT UNIQUE,
             scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -86,10 +87,11 @@ def init_db():
     """)
 
     # =========================
-    # ایندکس‌ها برای سرعت بیشتر
+    # ایندکس‌ها
     # =========================
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_url ON jobvision_jobs(url)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_company ON jobvision_jobs(company)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_category ON jobvision_jobs(job_category)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_scraped_at ON jobvision_jobs(scraped_at)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_scores_job_id ON jobvision_scores(job_id)")
 
@@ -130,8 +132,8 @@ def save_job(job_data):
         INSERT OR IGNORE INTO jobvision_jobs (
             job_hash, title, company, url, location, salary,
             is_urgent, description, requirements, full_text,
-            skills, age_range, gender, site
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            skills, age_range, gender, job_category, site
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         job_hash,
         job_data.get('title', ''),
@@ -146,6 +148,7 @@ def save_job(job_data):
         json.dumps(skills, ensure_ascii=False),
         job_data.get('age_range', ''),
         job_data.get('gender', ''),
+        job_data.get('job_category', ''),
         job_data.get('site', 'jobvision')
     ))
 
@@ -268,24 +271,25 @@ def get_all_jobs(limit=1000):
     return results
 
 
+def get_jobs_by_category(category, limit=1000):
+    """دریافت آگهی‌ها بر اساس گروه شغلی"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT * FROM jobvision_jobs 
+        WHERE job_category = ? 
+        ORDER BY scraped_at DESC LIMIT ?
+    """, (category, limit))
+    results = cursor.fetchall()
+    conn.close()
+    return results
+
+
 def get_jobs_count():
     """دریافت تعداد کل آگهی‌ها"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM jobvision_jobs")
-    count = cursor.fetchone()[0]
-    conn.close()
-    return count
-
-
-def get_new_jobs_count():
-    """دریافت تعداد آگهی‌های جدید از آخرین اجرا"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT COUNT(*) FROM jobvision_jobs 
-        WHERE scraped_at > datetime('now', '-1 day')
-    """)
     count = cursor.fetchone()[0]
     conn.close()
     return count
@@ -314,6 +318,15 @@ def get_stats():
     cursor.execute("SELECT COUNT(*) FROM jobvision_jobs WHERE is_urgent = 1")
     urgent = cursor.fetchone()[0]
 
+    # آمار بر اساس گروه شغلی
+    cursor.execute("""
+        SELECT job_category, COUNT(*) 
+        FROM jobvision_jobs 
+        WHERE job_category != '' 
+        GROUP BY job_category
+    """)
+    category_stats = cursor.fetchall()
+
     conn.close()
 
     return {
@@ -321,7 +334,8 @@ def get_stats():
         'total_companies': total_companies,
         'total_cities': total_cities,
         'last_week': last_week,
-        'urgent': urgent
+        'urgent': urgent,
+        'category_stats': category_stats
     }
 
 
@@ -348,6 +362,7 @@ if __name__ == "__main__":
         'skills': [{'name': 'Python', 'level': 'پیشرفته'}],
         'age_range': '20-35',
         'gender': 'تفاوتی ندارد',
+        'job_category': 'توسعه نرم افزار و برنامه نویسی',
         'site': 'jobvision'
     }
     
@@ -356,4 +371,4 @@ if __name__ == "__main__":
     
     stats = get_stats()
     print(f"📊 Stats: {stats}")
-    print("✅ Database test complete") 
+    print("✅ Database test complete")
