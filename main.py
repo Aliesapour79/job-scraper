@@ -15,11 +15,10 @@ from matcher import (
     calculate_final_score_v63,
     calculate_keyword_score,
     semantic_match_score,
-    calculate_outlier_score,
-    extract_all_jobs
+    calculate_outlier_score
 )
 
-from scrapers import JobvisionScraper
+from scrapers import JobvisionScraper, EEstekhdamScraper
 from report import generate_html_report
 from matcher.semantic_matcher import SemanticMatcher
 from utils import setup_driver
@@ -111,7 +110,7 @@ def main():
         {
             'name': 'e-estekhdam',
             'url': "https://www.e-estekhdam.com/search/%D8%A7%D8%B3%D8%AA%D8%AE%D8%AF%D8%A7%D9%85-%D8%AF%D8%B1-%D8%AA%D9%87%D8%B1%D8%A7%D9%86",
-            'type': 'default',
+            'type': 'e_estekhdam',
             'max_pages': 100
         },
         {
@@ -215,10 +214,23 @@ def main():
                 print(f"✅ Done: {successful} success | {failed} failed")
                 print(f"✅ Extracted {successful} jobs from {site['name']}")
 
-            else:
-                jobs = extract_all_jobs(driver, site['url'])
-                all_jobs.extend(jobs)
+            # =========================
+            # E-ESTEKHDAM SCRAPER
+            # =========================
+            elif site['type'] == 'e_estekhdam':
+                scraper = EEstekhdamScraper(driver)
+                
+                # تنظیم URL برای اسکرپر
+                scraper.url = site['url']
+                
+                jobs = scraper.extract_all_jobs()
+
+                if not jobs:
+                    print("⚠️ No jobs found")
+                    continue
+
                 print(f"✅ Extracted {len(jobs)} jobs from {site['name']}")
+                all_jobs.extend(jobs)
 
         # =========================
         # FINAL CHECK
