@@ -23,6 +23,11 @@ from report import generate_html_report
 from matcher.semantic_matcher import SemanticMatcher
 from utils import setup_driver
 
+# =========================
+# 📌 اضافه کردن import دیتابیس
+# =========================
+from utils.database import save_job, get_stats, init_db
+
 
 # =========================
 # CONFIG (Stable Production)
@@ -39,6 +44,7 @@ MAX_EMPTY_PAGES = 2
 # =========================
 ENABLE_PROCESSING = False   # پردازش و امتیازدهی (Embedding, TF-IDF, Scoring)
 ENABLE_OUTPUT = False       # تولید خروجی (JSON + HTML + Statistics)
+ENABLE_DB_SAVE = True       # 📌 جدید: ذخیره در دیتابیس
 
 
 # =========================
@@ -74,6 +80,32 @@ def save_partial(all_jobs, count):
 
 
 # =========================
+# 📌 ذخیره خط به خط در دیتابیس
+# =========================
+def save_job_to_db(job, site_name):
+    """ذخیره یک آگهی در دیتابیس (خط به خط)"""
+    if not ENABLE_DB_SAVE:
+        return False
+    
+    try:
+        # تنظیم اطلاعات برای ذخیره
+        job['site'] = site_name
+        
+        # ذخیره در دیتابیس
+        result = save_job(job)
+        
+        if result:
+            print(f"     💾 Saved to DB")
+        else:
+            print(f"     🔄 Duplicate (already in DB)")
+        
+        return result
+    except Exception as e:
+        print(f"     ❌ DB error: {e}")
+        return False
+
+
+# =========================
 # MAIN
 # =========================
 def main():
@@ -88,6 +120,7 @@ def main():
     print(f"\n📋 MODE STATUS:")
     print(f"   🧠 Processing (Scoring): {'✅ ENABLED' if ENABLE_PROCESSING else '❌ DISABLED'}")
     print(f"   📤 Output (JSON/HTML):  {'✅ ENABLED' if ENABLE_OUTPUT else '❌ DISABLED'}")
+    print(f"   💾 Database Save:      {'✅ ENABLED' if ENABLE_DB_SAVE else '❌ DISABLED'}")
     print("=" * 80)
 
     # =========================
@@ -102,6 +135,14 @@ def main():
     else:
         print("\n⏭️ Skipping Semantic Model (Processing disabled)")
         semantic_matcher = None
+
+    # =========================
+    # INIT DATABASE (اگر فعال باشد)
+    # =========================
+    if ENABLE_DB_SAVE:
+        print("\n📁 Initializing database...")
+        init_db()
+        print("✅ Database ready")
 
     # =========================
     # SITE CONFIGURATION
@@ -153,11 +194,13 @@ def main():
 
                 successful = 0
                 failed = 0
+                db_saved = 0
+                db_duplicate = 0
 
                 for i, job in enumerate(jobs, 1):
 
                     if i % 50 == 0 or i == 1:
-                        print(f"     Progress: {i}/{len(jobs)} | OK: {successful} | Fail: {failed}")
+                        print(f"     Progress: {i}/{len(jobs)} | OK: {successful} | Fail: {failed} | DB: {db_saved}")
 
                     if i > 20 and failed / i > MAX_FAILURE_RATE:
                         print(f"⚠️ Failure rate too high ({failed}/{i}), stopping batch")
@@ -191,8 +234,20 @@ def main():
                         }
 
                         job['skills'] = detail.get('skills', [])
+                        job['site'] = site['name']
+                        
                         all_jobs.append(job)
                         successful += 1
+
+                        # =========================
+                        # 💾 ذخیره در دیتابیس (خط به خط)
+                        # =========================
+                        if ENABLE_DB_SAVE:
+                            result = save_job(job)
+                            if result:
+                                db_saved += 1
+                            else:
+                                db_duplicate += 1
 
                     except Exception as e:
                         failed += 1
@@ -211,7 +266,7 @@ def main():
                     if i % PARTIAL_SAVE_EVERY == 0:
                         save_partial(all_jobs, i)
 
-                print(f"✅ Done: {successful} success | {failed} failed")
+                print(f"✅ Done: {successful} success | {failed} failed | DB Saved: {db_saved} | DB Duplicate: {db_duplicate}")
                 print(f"✅ Extracted {successful} jobs from {site['name']}")
 
             # =========================
@@ -220,7 +275,6 @@ def main():
             elif site['type'] == 'e_estekhdam':
                 scraper = EEstekhdamScraper(driver)
                 
-                # تنظیم URL برای اسکرپر
                 scraper.url = site['url']
                 
                 jobs = scraper.extract_all_jobs()
@@ -230,7 +284,22 @@ def main():
                     continue
 
                 print(f"✅ Extracted {len(jobs)} jobs from {site['name']}")
-                all_jobs.extend(jobs)
+                
+                # ذخیره آگهی‌های e-estekhdam در دیتابیس
+                db_saved = 0
+                db_duplicate = 0
+                for job in jobs:
+                    job['site'] = site['name']
+                    all_jobs.append(job)
+                    
+                    if ENABLE_DB_SAVE:
+                        result = save_job(job)
+                        if result:
+                            db_saved += 1
+                        else:
+                            db_duplicate += 1
+                
+                print(f"   💾 DB Saved: {db_saved} | DB Duplicate: {db_duplicate}")
 
         # =========================
         # FINAL CHECK
@@ -240,6 +309,16 @@ def main():
             return
 
         print(f"\n✅ TOTAL JOBS EXTRACTED: {len(all_jobs)}")
+
+        # نمایش آمار دیتابیس
+        if ENABLE_DB_SAVE:
+            stats = get_stats()
+            print(f"\n📈 Database Statistics:")
+            print(f"   📋 Total Jobs: {stats['total_jobs']}")
+            print(f"   🏢 Total Companies: {stats['total_companies']}")
+            print(f"   📍 Total Cities: {stats['total_cities']}")
+            print(f"   📅 Last Week: {stats['last_week']}")
+            print(f"   ⚡ Urgent: {stats['urgent']}")
 
         # =========================
         # 🎯 SKIP PROCESSING IF DISABLED
