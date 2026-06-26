@@ -33,7 +33,7 @@ from utils.database import save_job, get_stats, init_db
 # =========================
 # CONFIG (Stable Production)
 # =========================
-RESTART_EVERY = 30
+RESTART_EVERY = 60
 SLEEP_RANGE = (2, 4)
 PAGE_TIMEOUT = 90
 MAX_FAILURE_RATE = 0.25
