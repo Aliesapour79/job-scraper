@@ -4,6 +4,7 @@ import os
 import time
 import random
 import traceback
+from tqdm import tqdm
 
 from config import (
     EMBEDDING_MODEL,
@@ -213,17 +214,19 @@ def main():
                 db_saved = 0
                 db_duplicate = 0
 
-                for i, job in enumerate(jobs, 1):
+                # =========================
+                # 🔥 استفاده از tqdm برای نمایش پیشرفت
+                # =========================
+                for i, job in enumerate(tqdm(jobs, desc=f"Extracting {site['name']}", unit="job")):
+                    # شماره واقعی برای محاسبات (i از 0 شروع می‌شود)
+                    idx = i + 1
 
-                    if i % 50 == 0 or i == 1:
-                        print(f"     Progress: {i}/{len(jobs)} | OK: {successful} | Fail: {failed} | DB: {db_saved}")
-
-                    if i > 20 and failed / i > MAX_FAILURE_RATE:
-                        print(f"⚠️ Failure rate too high ({failed}/{i}), stopping batch")
+                    if idx > 20 and failed / idx > MAX_FAILURE_RATE:
+                        print(f"⚠️ Failure rate too high ({failed}/{idx}), stopping batch")
                         break
 
-                    if i % RESTART_EVERY == 0:
-                        print(f"     🔄 Restart at {i}...")
+                    if idx % RESTART_EVERY == 0:
+                        print(f"     🔄 Restart at {idx}...")
                         driver = restart_driver(driver)
                         scraper = JobvisionScraper(driver)
                         driver.get(site['url'])
@@ -251,6 +254,7 @@ def main():
 
                         job['skills'] = detail.get('skills', [])
                         job['site'] = site['name']
+                        job['job_category'] = site.get('job_category', '')
                         
                         all_jobs.append(job)
                         successful += 1
@@ -268,7 +272,7 @@ def main():
                     except Exception as e:
                         failed += 1
                         msg = str(e).lower()
-                        print(f"     ❌ Error {i}: {msg[:80]}")
+                        print(f"     ❌ Error on job {idx}: {msg[:80]}")
 
                         if "timeout" in msg or "crash" in msg:
                             driver = restart_driver(driver)
@@ -279,8 +283,8 @@ def main():
                     finally:
                         time.sleep(random.uniform(*SLEEP_RANGE))
 
-                    if i % PARTIAL_SAVE_EVERY == 0:
-                        save_partial(all_jobs, i)
+                    if idx % PARTIAL_SAVE_EVERY == 0:
+                        save_partial(all_jobs, idx)
 
                 print(f"✅ Done: {successful} success | {failed} failed | DB Saved: {db_saved} | DB Duplicate: {db_duplicate}")
                 print(f"✅ Extracted {successful} jobs from {site['name']}")
@@ -304,8 +308,10 @@ def main():
                 # ذخیره آگهی‌های e-estekhdam در دیتابیس
                 db_saved = 0
                 db_duplicate = 0
-                for job in jobs:
+                
+                for job in tqdm(jobs, desc=f"Saving {site['name']} to DB", unit="job"):
                     job['site'] = site['name']
+                    job['job_category'] = site.get('job_category', '')
                     all_jobs.append(job)
                     
                     if ENABLE_DB_SAVE:
@@ -376,7 +382,7 @@ def main():
         all_scores = []
         all_tfidf_scores = []
 
-        for idx, job in enumerate(all_jobs):
+        for idx, job in enumerate(tqdm(all_jobs, desc="Scoring jobs", unit="job")):
             s = job.get('sections', {})
 
             keyword_score, matched_keywords, _ = calculate_keyword_score(
