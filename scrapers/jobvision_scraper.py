@@ -154,7 +154,7 @@ class JobvisionScraper:
     # =========================
     # استخراج جزئیات آگهی (نسخه مقاوم با Retry)
     # =========================
-    def extract_job_detail(self, url, retry=2):
+    def extract_job_detail(self, url, retry=3):
         """
         استخراج جزئیات یک آگهی با Retry برای Timeout
         
