@@ -79,13 +79,18 @@ class JobvisionScraper:
         return cards
 
     # =========================
-    # استخراج همه صفحات (نسخه مقاوم)
+    # استخراج همه صفحات (نسخه مقاوم با Retry صفحات ناموفق)
     # =========================
     def extract_all_pages(self, max_pages=None):
         all_cards = []
         page_num = 1
         consecutive_failures = 0
         max_consecutive_failures = 5
+        
+        # =========================
+        # 📌 لیست صفحات ناموفق برای Retry
+        # =========================
+        failed_pages = []  # صفحاتی که خطا خوردند
 
         print(f"  🔄 Starting resilient multi-page scraping...")
 
@@ -139,6 +144,12 @@ class JobvisionScraper:
 
             except Exception as e:
                 print(f"     ❌ Error on page {page_num}: {e}")
+                
+                # =========================
+                # 📌 ذخیره صفحه خطا برای Retry
+                # =========================
+                failed_pages.append(page_num)
+                print(f"     📌 Page {page_num} added to retry list")
 
                 consecutive_failures += 1
                 if consecutive_failures >= max_consecutive_failures:
@@ -147,6 +158,45 @@ class JobvisionScraper:
 
                 time.sleep(5)
                 page_num += 1
+
+        # =========================
+        # 📌 Retry صفحات ناموفق
+        # =========================
+        if failed_pages:
+            print(f"\n  🔄 Retrying {len(failed_pages)} failed pages: {failed_pages}")
+            
+            for page_num in failed_pages:
+                print(f"  📄 Retrying page {page_num}...")
+                
+                # ساخت URL صفحه
+                current_url = self.driver.current_url
+                if 'page=' in current_url:
+                    page_url = re.sub(r'page=\d+', f'page={page_num}', current_url)
+                else:
+                    page_url = current_url + f'?page={page_num}'
+                
+                try:
+                    self.driver.get(page_url)
+                    time.sleep(5)
+                    
+                    # تلاش برای استخراج کارت‌ها با Retry
+                    cards = None
+                    for attempt in range(3):
+                        try:
+                            cards = self.extract_job_cards()
+                            break
+                        except Exception as e:
+                            print(f"     ⚠️ Retry attempt {attempt + 1} failed: {e}")
+                            time.sleep(3)
+                    
+                    if cards:
+                        print(f"     ✅ Found {len(cards)} jobs on page {page_num} (retry successful)")
+                        all_cards.extend(cards)
+                    else:
+                        print(f"     ⚠️ No jobs found on page {page_num} (retry)")
+                        
+                except Exception as e:
+                    print(f"     ❌ Retry failed for page {page_num}: {e}")
 
         print(f"  ✅ Total: {len(all_cards)} jobs from {page_num} pages")
         return all_cards
