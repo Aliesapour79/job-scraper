@@ -204,13 +204,14 @@ class JobvisionScraper:
     # =========================
     # استخراج جزئیات آگهی (نسخه مقاوم با Retry)
     # =========================
-    def extract_job_detail(self, url, retry=3):
+    def extract_job_detail(self, url, retry=5 , base_timeout=30):
         """
-        استخراج جزئیات یک آگهی با Retry برای Timeout
-        
-        Args:
-            url: لینک آگهی
-            retry: تعداد تلاش مجدد در صورت Timeout (پیش‌فرض ۲)
+                استخراج جزئیات با Timeout افزایشی
+    
+    Args:
+        url: لینک آگهی
+        retry: تعداد تلاش مجدد
+        base_timeout: Timeout اولیه (ثانیه)
         """
         detail = {
             'title': '',
@@ -228,14 +229,15 @@ class JobvisionScraper:
 
         for attempt in range(retry + 1):
             try:
-                self.driver.set_page_load_timeout(30)
-
+                timeout = base_timeout + (attempt * 10) # 30 , 40 , 50 , 60 , 70 , 80
+                self.driver.set_page_load_timeout(timeout)
+                print(f"     ⏳ Loading with {timeout}s timeout (attempt {attempt+1})")
                 try:
                     self.driver.get(url)
                 except Exception as e:
                     # اگر Timeout بود و تلاش باقی مانده، دوباره تلاش کن
                     if "timeout" in str(e).lower() and attempt < retry:
-                        print(f"     ⏳ Retry {attempt+1}/{retry} for {url[:50]}...")
+                        print(f"     ⏳ Timeout with {timeout}s, retrying with more time...")
                         time.sleep(3)
                         continue
                     else:
@@ -298,7 +300,7 @@ class JobvisionScraper:
             except Exception as e:
                 # اگر خطای Timeout بود و تلاش باقی مانده، ادامه بده
                 if "timeout" in str(e).lower() and attempt < retry:
-                    print(f"     ⏳ Retry {attempt+1}/{retry} for {url[:50]}...")
+                    print(f"     ⏳ Timeout, retrying with more time...")
                     time.sleep(3)
                     continue
                 else:
