@@ -39,13 +39,50 @@ PAGE_TIMEOUT = 90
 MAX_FAILURE_RATE = 0.25
 PARTIAL_SAVE_EVERY = 50
 MAX_EMPTY_PAGES = 2
+MAX_DRIVER_RETRIES = 3
+
 
 # =========================
 # 🎯 FLAGS: کنترل بخش‌های مختلف
 # =========================
-ENABLE_PROCESSING = False   # پردازش و امتیازدهی (Embedding, TF-IDF, Scoring)
-ENABLE_OUTPUT = False       # تولید خروجی (JSON + HTML + Statistics)
-ENABLE_DB_SAVE = True       # 📌 جدید: ذخیره در دیتابیس
+ENABLE_PROCESSING = False
+ENABLE_OUTPUT = False
+ENABLE_DB_SAVE = True
+
+
+# =========================
+# 🛡️ SAFE DRIVER GET
+# =========================
+def safe_driver_get(driver, url, site_url, max_retries=MAX_DRIVER_RETRIES):
+    """بارگذاری URL با مدیریت خطا و Retry خودکار"""
+    for attempt in range(max_retries):
+        try:
+            driver.set_page_load_timeout(PAGE_TIMEOUT)
+            driver.get(url)
+            return True
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            print(f"     ⚠️ Attempt {attempt+1}/{max_retries} failed: {str(e)[:60]}")
+            
+            if "timeout" in error_msg or "crash" in error_msg or "connection" in error_msg:
+                print(f"     🔄 Restarting driver...")
+                try:
+                    driver.quit()
+                except:
+                    pass
+                time.sleep(3)
+                driver = setup_driver()
+                driver.get(site_url)
+                time.sleep(3)
+                print(f"     ✅ Driver restarted")
+                continue
+            else:
+                print(f"     ❌ Non-retryable error")
+                return False
+    
+    print(f"     ❌ Failed after {max_retries} attempts")
+    return False
 
 
 # =========================
@@ -81,32 +118,6 @@ def save_partial(all_jobs, count):
 
 
 # =========================
-# 📌 ذخیره خط به خط در دیتابیس
-# =========================
-def save_job_to_db(job, site_name):
-    """ذخیره یک آگهی در دیتابیس (خط به خط)"""
-    if not ENABLE_DB_SAVE:
-        return False
-    
-    try:
-        # تنظیم اطلاعات برای ذخیره
-        job['site'] = site_name
-        
-        # ذخیره در دیتابیس
-        result = save_job(job)
-        
-        if result:
-            print(f"     💾 Saved to DB")
-        else:
-            print(f"     🔄 Duplicate (already in DB)")
-        
-        return result
-    except Exception as e:
-        print(f"     ❌ DB error: {e}")
-        return False
-
-
-# =========================
 # MAIN
 # =========================
 def main():
@@ -117,7 +128,6 @@ def main():
     print("   (Multi-Site: e-estekhdam + Jobvision)")
     print("=" * 80)
 
-    # نمایش وضعیت Flagها
     print(f"\n📋 MODE STATUS:")
     print(f"   🧠 Processing (Scoring): {'✅ ENABLED' if ENABLE_PROCESSING else '❌ DISABLED'}")
     print(f"   📤 Output (JSON/HTML):  {'✅ ENABLED' if ENABLE_OUTPUT else '❌ DISABLED'}")
@@ -138,7 +148,7 @@ def main():
         semantic_matcher = None
 
     # =========================
-    # INIT DATABASE (اگر فعال باشد)
+    # INIT DATABASE
     # =========================
     if ENABLE_DB_SAVE:
         print("\n📁 Initializing database...")
@@ -149,35 +159,35 @@ def main():
     # SITE CONFIGURATION
     # =========================
     sites_config = [
-    {
-        'name': 'jobvision-developer',
-        'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
-        'type': 'jobvision',
-        'max_pages': 100,
-        'job_category': 'توسعه نرم افزار و برنامه نویسی'
-    },
-    {
-        'name': 'jobvision-data-science',
-        'url': "https://jobvision.ir/jobs/category/data-science-in-all-cities-of-tehran",
-        'type': 'jobvision',
-        'max_pages': 100,
-        'job_category': 'علوم داده / هوش مصنوعی'
-    },
-    {
-        'name': 'jobvision-secretary',
-        'url': "https://jobvision.ir/jobs/category/secretary-in-all-cities-of-tehran",
-        'type': 'jobvision',
-        'max_pages': 100,
-        'job_category': 'مسئول دفتر / کارمند اداری'
-    },
-    {
-        'name': 'jobvision-hr',
-        'url': "https://jobvision.ir/jobs/category/human-resources-in-all-cities-of-tehran",
-        'type': 'jobvision',
-        'max_pages': 100,
-        'job_category': 'منابع انسانی'
-    }
-]
+        # {
+        #     'name': 'jobvision-developer',
+        #     'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
+        #     'type': 'jobvision',
+        #     'max_pages': 100,
+        #     'job_category': 'توسعه نرم افزار و برنامه نویسی'
+        # },
+        # {
+        #     'name': 'jobvision-data-science',
+        #     'url': "https://jobvision.ir/jobs/category/data-science-in-all-cities-of-tehran",
+        #     'type': 'jobvision',
+        #     'max_pages': 100,
+        #     'job_category': 'علوم داده / هوش مصنوعی'
+        # },
+        {
+            'name': 'jobvision-secretary',
+            'url': "https://jobvision.ir/jobs/category/secretary-in-all-cities-of-tehran",
+            'type': 'jobvision',
+            'max_pages': 100,
+            'job_category': 'مسئول دفتر / کارمند اداری'
+        },
+        {
+            'name': 'jobvision-hr',
+            'url': "https://jobvision.ir/jobs/category/human-resources-in-all-cities-of-tehran",
+            'type': 'jobvision',
+            'max_pages': 100,
+            'job_category': 'منابع انسانی'
+        }
+    ]
 
     driver = setup_driver()
     all_jobs = []
@@ -189,12 +199,10 @@ def main():
             print(f"   URL: {site['url']}")
             print(f"{'='*60}")
 
-            driver.get(site['url'])
-            time.sleep(3)
+            if not safe_driver_get(driver, site['url'], site['url']):
+                print(f"⚠️ Could not load {site['name']}, skipping...")
+                continue
 
-            # =========================
-            # JOBVISION SCRAPER
-            # =========================
             if site['type'] == 'jobvision':
                 scraper = JobvisionScraper(driver)
 
@@ -214,11 +222,7 @@ def main():
                 db_saved = 0
                 db_duplicate = 0
 
-                # =========================
-                # 🔥 استفاده از tqdm برای نمایش پیشرفت
-                # =========================
                 for i, job in enumerate(tqdm(jobs, desc=f"Extracting {site['name']}", unit="job")):
-                    # شماره واقعی برای محاسبات (i از 0 شروع می‌شود)
                     idx = i + 1
 
                     if idx > 20 and failed / idx > MAX_FAILURE_RATE:
@@ -233,11 +237,12 @@ def main():
                         time.sleep(3)
 
                     try:
-                        driver.set_page_load_timeout(PAGE_TIMEOUT)
-                        driver.set_script_timeout(PAGE_TIMEOUT)
+                        if not safe_driver_get(driver, job['url'], site['url']):
+                            failed += 1
+                            print(f"     ❌ Skipping job {idx} (page load failed)")
+                            continue
 
                         detail = scraper.extract_job_detail(job['url'])
-
                         driver.get('about:blank')
 
                         if not detail or detail.get("error"):
@@ -259,9 +264,6 @@ def main():
                         all_jobs.append(job)
                         successful += 1
 
-                        # =========================
-                        # 💾 ذخیره در دیتابیس (خط به خط)
-                        # =========================
                         if ENABLE_DB_SAVE:
                             result = save_job(job)
                             if result:
@@ -289,14 +291,9 @@ def main():
                 print(f"✅ Done: {successful} success | {failed} failed | DB Saved: {db_saved} | DB Duplicate: {db_duplicate}")
                 print(f"✅ Extracted {successful} jobs from {site['name']}")
 
-            # =========================
-            # E-ESTEKHDAM SCRAPER
-            # =========================
             elif site['type'] == 'e_estekhdam':
                 scraper = EEstekhdamScraper(driver)
-                
                 scraper.url = site['url']
-                
                 jobs = scraper.extract_all_jobs()
 
                 if not jobs:
@@ -305,7 +302,6 @@ def main():
 
                 print(f"✅ Extracted {len(jobs)} jobs from {site['name']}")
                 
-                # ذخیره آگهی‌های e-estekhdam در دیتابیس
                 db_saved = 0
                 db_duplicate = 0
                 
@@ -332,7 +328,6 @@ def main():
 
         print(f"\n✅ TOTAL JOBS EXTRACTED: {len(all_jobs)}")
 
-        # نمایش آمار دیتابیس
         if ENABLE_DB_SAVE:
             stats = get_stats()
             print(f"\n📈 Database Statistics:")
@@ -342,9 +337,6 @@ def main():
             print(f"   📅 Last Week: {stats['last_week']}")
             print(f"   ⚡ Urgent: {stats['urgent']}")
 
-        # =========================
-        # 🎯 SKIP PROCESSING IF DISABLED
-        # =========================
         if not ENABLE_PROCESSING:
             print("\n⏭️ Processing (Scoring) is DISABLED.")
             print("   Data extracted successfully. Run with ENABLE_PROCESSING=True to score.")
@@ -352,7 +344,7 @@ def main():
             return
 
         # =========================
-        # PREPARE FOR SCORING
+        # SCORING (اگر فعال باشد)
         # =========================
         print("\n🔄 Calculating match scores...")
         print("   This may take a few minutes...")
@@ -364,9 +356,6 @@ def main():
                 f"{s.get('title','')} {s.get('description','')} {s.get('requirements','')}"
             )
 
-        # =========================
-        # EMBEDDINGS
-        # =========================
         print("  🧠 Running embeddings...")
         embedding_scores = (
             semantic_matcher.calculate_batch_similarity(job_texts, RESUME_TEXT)
@@ -374,9 +363,6 @@ def main():
             else [0] * len(all_jobs)
         )
 
-        # =========================
-        # SCORING
-        # =========================
         print("  📊 Scoring jobs...")
         results = []
         all_scores = []
@@ -434,32 +420,20 @@ def main():
                 "error": job.get('error', None)
             })
 
-        # =========================
-        # OUTLIER DETECTION
-        # =========================
         print("  📊 Calculating outlier scores...")
         for r in results:
             r['outlier_score'] = calculate_outlier_score(all_scores, r['score'])
 
-        # =========================
-        # FILTER
-        # =========================
         min_score = FILTERS.get('min_score', 20)
         filtered = [r for r in results if r['score'] >= min_score]
         filtered.sort(key=lambda x: x['score'], reverse=True)
 
-        # =========================
-        # 🎯 SKIP OUTPUT IF DISABLED
-        # =========================
         if not ENABLE_OUTPUT:
             print("\n⏭️ Output (JSON/HTML) is DISABLED.")
             print(f"   Scores calculated for {len(filtered)} relevant jobs.")
             print("   Run with ENABLE_OUTPUT=True to generate files.")
             return
 
-        # =========================
-        # SAVE OUTPUT
-        # =========================
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
 
         json_file = f"output/job_matches_v7_{ts}.json"
@@ -470,9 +444,6 @@ def main():
 
         generate_html_report(filtered, html_file)
 
-        # =========================
-        # STATISTICS
-        # =========================
         tech_count = sum(1 for r in filtered if r.get('category') == 'technical')
         admin_count = sum(1 for r in filtered if r.get('category') == 'administrative')
         hybrid_count = sum(1 for r in filtered if r.get('category') == 'hybrid')
@@ -492,9 +463,6 @@ def main():
         print(f"   📍 By site: {site_stats}")
         print("=" * 80)
 
-        # =========================
-        # TOP 10
-        # =========================
         if filtered:
             print("\n🏆 TOP 10 MATCHING JOBS:\n")
             for i, job in enumerate(filtered[:10], 1):
@@ -517,7 +485,29 @@ def main():
             driver.quit()
         except:
             pass
-        print("\n✅ Browser closed")
+
+        print("\n" + "=" * 80)
+        print("✅ ALL SITES COMPLETED SUCCESSFULLY!")
+        print("=" * 80)
+
+        if ENABLE_DB_SAVE:
+            try:
+                stats = get_stats()
+                print(f"\n📊 Final Statistics:")
+                print(f"   📋 Total Jobs: {stats['total_jobs']}")
+                print(f"   🏢 Total Companies: {stats['total_companies']}")
+                print(f"   📍 Total Cities: {stats['total_cities']}")
+                print(f"   📅 Last Week: {stats['last_week']}")
+                print(f"   ⚡ Urgent: {stats['urgent']}")
+            except:
+                pass
+
+        print(f"\n💾 Database: data/jobs.db")
+        print(f"📁 Output: output/")
+        print("\n" + "=" * 80)
+
+        input("\nPress ENTER to exit...")
+        print("✅ Browser closed")
 
 
 if __name__ == "__main__":
