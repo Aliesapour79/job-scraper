@@ -85,7 +85,7 @@ class JobvisionScraper:
         all_cards = []
         page_num = 1
         consecutive_failures = 0
-        max_consecutive_failures = 3
+        max_consecutive_failures = 5
 
         print(f"  🔄 Starting resilient multi-page scraping...")
 
@@ -102,7 +102,7 @@ class JobvisionScraper:
                         break
                     except Exception as e:
                         print(f"     ⚠️ Attempt {attempt + 1} failed: {e}")
-                        time.sleep(3)
+                        time.sleep(5)
 
                 # اگر هیچ نتیجه‌ای نگرفتیم
                 if not cards:
