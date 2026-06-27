@@ -284,7 +284,7 @@ class JobvisionScraper:
 
         for attempt in range(retry + 1):
             try:
-                timeout = base_timeout + (attempt * 10)  # 30, 40, 50, 60, 70, 80
+                timeout = base_timeout + (attempt * 15)  # 45, 55, 65, 75, 85, 95
                 self.driver.set_page_load_timeout(timeout)
                 print(f"     ⏳ Loading with {timeout}s timeout (attempt {attempt+1})")
                 
@@ -294,14 +294,14 @@ class JobvisionScraper:
                     # اگر Timeout بود و تلاش باقی مانده، دوباره تلاش کن
                     if "timeout" in str(e).lower() and attempt < retry:
                         print(f"     ⏳ Timeout with {timeout}s, retrying with more time...")
-                        time.sleep(3)
+                        time.sleep(5)
                         continue
                     else:
                         print(f"     ⚠️ Page load failed: {e}")
                         detail['error'] = str(e)
                         return detail
 
-                time.sleep(1.5)
+                time.sleep(2)
 
                 # کل متن
                 body = self.driver.find_element(By.TAG_NAME, 'body')
