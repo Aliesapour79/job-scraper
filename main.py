@@ -39,8 +39,6 @@ PAGE_TIMEOUT = 90
 MAX_FAILURE_RATE = 0.25
 PARTIAL_SAVE_EVERY = 50
 MAX_EMPTY_PAGES = 2
-MAX_DRIVER_RETRIES = 3
-
 
 # =========================
 # 🎯 FLAGS: کنترل بخش‌های مختلف
@@ -48,42 +46,6 @@ MAX_DRIVER_RETRIES = 3
 ENABLE_PROCESSING = False
 ENABLE_OUTPUT = False
 ENABLE_DB_SAVE = True
-
-
-# =========================
-# 🛡️ SAFE DRIVER GET
-# =========================
-def safe_driver_get(driver, url, site_url, max_retries=MAX_DRIVER_RETRIES):
-    """بارگذاری URL با مدیریت خطا و Retry خودکار"""
-    for attempt in range(max_retries):
-        try:
-            driver.set_page_load_timeout(PAGE_TIMEOUT)
-            driver.get(url)
-            return True
-            
-        except Exception as e:
-            error_msg = str(e).lower()
-            print(f"     ⚠️ Attempt {attempt+1}/{max_retries} failed: {str(e)[:60]}")
-            
-            if "timeout" in error_msg or "crash" in error_msg or "connection" in error_msg:
-                print(f"     🔄 Restarting driver...")
-                try:
-                    driver.quit()
-                except:
-                    pass
-                time.sleep(3)
-                driver = setup_driver()
-                driver.get(site_url)
-                time.sleep(3)
-                print(f"     ✅ Driver restarted")
-                continue
-            else:
-                print(f"     ❌ Non-retryable error")
-                return False
-    
-    print(f"     ❌ Failed after {max_retries} attempts")
-    return False
-
 
 # =========================
 # DRIVER RESTART
@@ -199,10 +161,6 @@ def main():
             print(f"   URL: {site['url']}")
             print(f"{'='*60}")
 
-            if not safe_driver_get(driver, site['url'], site['url']):
-                print(f"⚠️ Could not load {site['name']}, skipping...")
-                continue
-
             if site['type'] == 'jobvision':
                 scraper = JobvisionScraper(driver)
 
@@ -237,11 +195,6 @@ def main():
                         time.sleep(3)
 
                     try:
-                        if not safe_driver_get(driver, job['url'], site['url']):
-                            failed += 1
-                            print(f"     ❌ Skipping job {idx} (page load failed)")
-                            continue
-
                         detail = scraper.extract_job_detail(job['url'])
                         driver.get('about:blank')
 
@@ -276,7 +229,7 @@ def main():
                         msg = str(e).lower()
                         print(f"     ❌ Error on job {idx}: {msg[:80]}")
 
-                        if "timeout" in msg or "crash" in msg:
+                        if "crash" in msg:
                             driver = restart_driver(driver)
                             scraper = JobvisionScraper(driver)
                             driver.get(site['url'])
