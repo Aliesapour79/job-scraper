@@ -34,7 +34,7 @@ from utils import setup_driver
 # =========================
 # 📌 اضافه کردن import دیتابیس
 # =========================
-from utils.database import save_job, get_stats, init_db
+from utils.database import save_job, get_stats, init_db, get_all_existing_urls
 
 
 # =========================
@@ -227,8 +227,34 @@ def main():
                     continue
 
                 print(f"🔍 {len(jobs)} jobs found")
-                print("⏱️ Extracting details... (this will take ~45-60 min)")
 
+                # =========================
+                # 🔍 فیلتر تکراری‌ها با استفاده از Set (O(1))
+                # =========================
+                if ENABLE_DB_SAVE:
+                    print("\n🔍 Loading existing URLs from database...")
+                    existing_urls = get_all_existing_urls()
+                    print(f"   📋 {len(existing_urls)} existing jobs in DB")
+                    
+                    original_count = len(jobs)
+                    
+                    # فیلتر کردن با Set (خیلی سریع - O(1))
+                    jobs = [job for job in jobs if job['url'] not in existing_urls]
+                    
+                    skipped = original_count - len(jobs)
+                    print(f"   ✅ {len(jobs)} new jobs | ⏭️ {skipped} duplicates skipped")
+                    
+                    if not jobs:
+                        print(f"⚠️ No new jobs for {site['name']}, skipping to next site...")
+                        continue
+                    
+                    print(f"\n📥 Extracting details for {len(jobs)} new jobs...")
+                else:
+                    print(f"\n📥 Extracting details for {len(jobs)} jobs...")
+
+                # =========================
+                # شروع استخراج جزئیات فقط برای آگهی‌های جدید
+                # =========================
                 successful = 0
                 failed = 0
                 db_saved = 0

@@ -338,6 +338,23 @@ def get_stats():
         'category_stats': category_stats
     }
 
+# =========================
+# دریافت همه URLهای موجود در دیتابیس (برای چک تکراری)
+# =========================
+def get_all_existing_urls():
+    """
+    دریافت همه URLهای موجود در دیتابیس به صورت Set
+    برای چک کردن تکراری‌ها با سرعت O(1)
+    
+    Returns:
+        set: مجموعه‌ای از همه URLهای موجود در دیتابیس
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT url FROM jobvision_jobs")
+    urls = {row[0] for row in cursor.fetchall()}
+    conn.close()
+    return urls
 
 # =========================
 # تست دیتابیس
