@@ -100,7 +100,7 @@ class JobvisionScraper:
             return current_url + f"?page={page_num}"
 
     # =========================
-    # استخراج همه صفحات (نسخه مقاوم با Retry صفحات ناموفق)
+    # استخراج همه صفحات (نسخه مقاوم با تشخیص صفحات خالی)
     # =========================
     def extract_all_pages(self, max_pages=None):
         all_cards = []
@@ -109,12 +109,11 @@ class JobvisionScraper:
         consecutive_failures = 0
         max_consecutive_failures = 5
         MAX_PAGE_RETRY = 3
+        EMPTY_PAGE_LIMIT = 3  # 🔥 جدید: بعد از 3 صفحه خالی متوقف شو
 
-        # صفحات ناموفق با ساختار استاندارد
         failed_pages = {}
-
-        # جلوگیری از duplicate
         seen_urls = set()
+        empty_page_count = 0  # 🔥 جدید: شمارش صفحات خالی پشت سر هم
 
         print("  🔄 Starting resilient multi-page scraping...")
 
@@ -127,7 +126,12 @@ class JobvisionScraper:
                 try:
                     cards = self.extract_job_cards()
 
-                    if cards:
+                    # =========================
+                    # 🔥 تشخیص: صفحه خالی vs صفحه خراب
+                    # =========================
+                    if cards and len(cards) > 0:
+                        # صفحه موفق و دارای آگهی
+                        empty_page_count = 0  # ریست
                         new_cards = 0
 
                         for card in cards:
@@ -145,14 +149,26 @@ class JobvisionScraper:
                         break
 
                     else:
-                        print(f"     ⚠️ No cards found (attempt {attempt})")
+                        # صفحه خالی (بدون آگهی)
+                        print(f"     ⚠️ Empty page detected (attempt {attempt})")
+                        empty_page_count += 1
                         time.sleep(2)
+
+                        # =========================
+                        # 🔥 اگر 3 صفحه خالی پشت سر هم → توقف
+                        # =========================
+                        if empty_page_count >= EMPTY_PAGE_LIMIT:
+                            print(f"     🛑 {empty_page_count} consecutive empty pages → STOP pagination")
+                            print(f"  ✅ Total collected jobs: {len(all_cards)}")
+                            return all_cards
 
                 except Exception as e:
                     print(f"     ❌ Attempt {attempt} failed: {str(e)[:80]}")
                     time.sleep(3)
 
-            # اگر صفحه کامل شکست خورد
+            # =========================
+            # اگر صفحه شکست خورد (نه خالی)
+            # =========================
             if not page_success:
                 consecutive_failures += 1
 
