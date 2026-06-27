@@ -459,7 +459,7 @@ def main():
         print(f"📁 Output: output/")
         print("\n" + "=" * 80)
 
-        input("\nPress ENTER to exit...")
+        # input("\nPress ENTER to exit...")
         print("✅ Browser closed")
 
 
