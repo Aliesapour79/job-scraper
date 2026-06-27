@@ -1,3 +1,5 @@
+# main.py
+
 import json
 from datetime import datetime
 import os
@@ -39,6 +41,8 @@ PAGE_TIMEOUT = 90
 MAX_FAILURE_RATE = 0.25
 PARTIAL_SAVE_EVERY = 50
 MAX_EMPTY_PAGES = 2
+MAX_DRIVER_RETRIES = 3
+
 
 # =========================
 # 🎯 FLAGS: کنترل بخش‌های مختلف
@@ -46,6 +50,34 @@ MAX_EMPTY_PAGES = 2
 ENABLE_PROCESSING = False
 ENABLE_OUTPUT = False
 ENABLE_DB_SAVE = True
+
+
+# =========================
+# 🛡️ SAFE DRIVER GET (بدون ریستارت اضطراری)
+# =========================
+def safe_driver_get(driver, url, site_url, max_retries=MAX_DRIVER_RETRIES):
+    """بارگذاری URL با Retry (بدون ریستارت اضطراری)"""
+    for attempt in range(max_retries):
+        try:
+            driver.set_page_load_timeout(PAGE_TIMEOUT)
+            driver.get(url)
+            return True
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            print(f"     ⚠️ Attempt {attempt+1}/{max_retries} failed: {str(e)[:60]}")
+            
+            if "crash" in error_msg or "connection" in error_msg:
+                # فقط صبر می‌کنیم و Retry می‌کنیم (بدون ریستارت)
+                print(f"     ⏳ Retrying...")
+                time.sleep(3)
+                continue
+            else:
+                print(f"     ❌ Non-retryable error")
+                return False
+    
+    print(f"     ❌ Failed after {max_retries} attempts")
+    return False
 
 # =========================
 # DRIVER RESTART
@@ -161,6 +193,10 @@ def main():
             print(f"   URL: {site['url']}")
             print(f"{'='*60}")
 
+            if not safe_driver_get(driver, site['url'], site['url']):
+                print(f"⚠️ Could not load {site['name']}, skipping...")
+                continue
+
             if site['type'] == 'jobvision':
                 scraper = JobvisionScraper(driver)
 
@@ -195,6 +231,11 @@ def main():
                         time.sleep(3)
 
                     try:
+                        if not safe_driver_get(driver, job['url'], site['url']):
+                            failed += 1
+                            print(f"     ❌ Skipping job {idx} (page load failed)")
+                            continue
+
                         detail = scraper.extract_job_detail(job['url'])
                         driver.get('about:blank')
 
@@ -459,7 +500,7 @@ def main():
         print(f"📁 Output: output/")
         print("\n" + "=" * 80)
 
-        # input("\nPress ENTER to exit...")
+        input("\nPress ENTER to exit...")
         print("✅ Browser closed")
 
 

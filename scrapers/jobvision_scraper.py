@@ -79,139 +79,178 @@ class JobvisionScraper:
         return cards
 
     # =========================
+    # ساخت URL صفحه (کمکی)
+    # =========================
+    def _build_page_url(self, page_num):
+        """
+        ساخت امن URL برای صفحه Retry
+        """
+        try:
+            current_url = self.driver.current_url
+
+            if "page=" in current_url:
+                return re.sub(r"page=\d+", f"page={page_num}", current_url)
+
+            if "?" in current_url:
+                return f"{current_url}&page={page_num}"
+
+            return f"{current_url}?page={page_num}"
+
+        except:
+            return current_url + f"?page={page_num}"
+
+    # =========================
     # استخراج همه صفحات (نسخه مقاوم با Retry صفحات ناموفق)
     # =========================
     def extract_all_pages(self, max_pages=None):
         all_cards = []
         page_num = 1
+
         consecutive_failures = 0
         max_consecutive_failures = 5
-        
-        # =========================
-        # 📌 لیست صفحات ناموفق برای Retry
-        # =========================
-        failed_pages = []  # صفحاتی که خطا خوردند
+        MAX_PAGE_RETRY = 3
 
-        print(f"  🔄 Starting resilient multi-page scraping...")
+        # صفحات ناموفق با ساختار استاندارد
+        failed_pages = {}
+
+        # جلوگیری از duplicate
+        seen_urls = set()
+
+        print("  🔄 Starting resilient multi-page scraping...")
 
         while True:
-            print(f"  📄 Scraping page {page_num}...")
+            print(f"\n  📄 Scraping page {page_num}...")
 
-            try:
-                cards = None
+            page_success = False
 
-                # retry برای استخراج کارت‌ها
-                for attempt in range(3):
-                    try:
-                        cards = self.extract_job_cards()
+            for attempt in range(1, MAX_PAGE_RETRY + 1):
+                try:
+                    cards = self.extract_job_cards()
+
+                    if cards:
+                        new_cards = 0
+
+                        for card in cards:
+                            url = card.get("url")
+
+                            if url and url not in seen_urls:
+                                seen_urls.add(url)
+                                all_cards.append(card)
+                                new_cards += 1
+
+                        print(f"     ✅ Found {len(cards)} jobs ({new_cards} new)")
+
+                        page_success = True
+                        consecutive_failures = 0
                         break
-                    except Exception as e:
-                        print(f"     ⚠️ Attempt {attempt + 1} failed: {e}")
-                        time.sleep(5)
 
-                # اگر هیچ نتیجه‌ای نگرفتیم
-                if not cards:
-                    consecutive_failures += 1
+                    else:
+                        print(f"     ⚠️ No cards found (attempt {attempt})")
+                        time.sleep(2)
 
-                    if consecutive_failures >= max_consecutive_failures:
-                        print(f"     ❌ Too many failures, stopping...")
-                        break
+                except Exception as e:
+                    print(f"     ❌ Attempt {attempt} failed: {str(e)[:80]}")
+                    time.sleep(3)
 
-                    print(f"     ⚠️ No cards found, trying next page...")
-                    page_num += 1
-                    continue
+            # اگر صفحه کامل شکست خورد
+            if not page_success:
+                consecutive_failures += 1
 
-                all_cards.extend(cards)
-                print(f"     ✅ Found {len(cards)} jobs on page {page_num}")
+                failed_pages[page_num] = {
+                    "retry": failed_pages.get(page_num, {}).get("retry", 0) + 1,
+                    "reason": "no_cards_or_error"
+                }
 
-                consecutive_failures = 0
+                print(f"     📌 Page {page_num} added to retry queue")
 
-                if max_pages and page_num >= max_pages:
-                    print(f"     ⏹️ Reached max pages ({max_pages})")
+                if consecutive_failures >= max_consecutive_failures:
+                    print("     ❌ Too many consecutive failures, stopping scraping")
                     break
 
+            # محدودیت صفحات
+            if max_pages and page_num >= max_pages:
+                print(f"     ⏹️ Reached max pages ({max_pages})")
+                break
+
+            # رفتن به صفحه بعد
+            try:
                 next_url = self.get_next_page_url()
 
                 if not next_url:
-                    print(f"     ⏹️ No more pages")
+                    print("     ⏹️ No next page found")
                     break
 
                 print(f"     ➡️ Going to page {page_num + 1}...")
+
                 self.driver.get(next_url)
                 time.sleep(3)
 
                 page_num += 1
 
             except Exception as e:
-                print(f"     ❌ Error on page {page_num}: {e}")
-                
-                # =========================
-                # 📌 ذخیره صفحه خطا برای Retry
-                # =========================
-                failed_pages.append(page_num)
-                print(f"     📌 Page {page_num} added to retry list")
+                print(f"     ❌ Navigation error to page {page_num + 1}: {e}")
 
-                consecutive_failures += 1
-                if consecutive_failures >= max_consecutive_failures:
-                    print(f"     ❌ Too many failures, stopping...")
-                    break
+                failed_pages[page_num + 1] = {
+                    "retry": failed_pages.get(page_num + 1, {}).get("retry", 0) + 1,
+                    "reason": "navigation_error"
+                }
 
                 time.sleep(5)
                 page_num += 1
 
         # =========================
-        # 📌 Retry صفحات ناموفق
+        # Retry صفحات خراب (نسخه ساده و امن)
         # =========================
         if failed_pages:
-            print(f"\n  🔄 Retrying {len(failed_pages)} failed pages: {failed_pages}")
-            
-            for page_num in failed_pages:
-                print(f"  📄 Retrying page {page_num}...")
-                
-                # ساخت URL صفحه
-                current_url = self.driver.current_url
-                if 'page=' in current_url:
-                    page_url = re.sub(r'page=\d+', f'page={page_num}', current_url)
-                else:
-                    page_url = current_url + f'?page={page_num}'
-                
-                try:
-                    self.driver.get(page_url)
-                    time.sleep(5)
-                    
-                    # تلاش برای استخراج کارت‌ها با Retry
-                    cards = None
-                    for attempt in range(3):
-                        try:
-                            cards = self.extract_job_cards()
-                            break
-                        except Exception as e:
-                            print(f"     ⚠️ Retry attempt {attempt + 1} failed: {e}")
-                            time.sleep(3)
-                    
-                    if cards:
-                        print(f"     ✅ Found {len(cards)} jobs on page {page_num} (retry successful)")
-                        all_cards.extend(cards)
-                    else:
-                        print(f"     ⚠️ No jobs found on page {page_num} (retry)")
-                        
-                except Exception as e:
-                    print(f"     ❌ Retry failed for page {page_num}: {e}")
+            print(f"\n  🔄 Retrying {len(failed_pages)} failed pages...")
 
-        print(f"  ✅ Total: {len(all_cards)} jobs from {page_num} pages")
+            for page, info in failed_pages.items():
+                if info["retry"] >= MAX_PAGE_RETRY:
+                    print(f"     ⛔ Skipping page {page} (max retries reached)")
+                    continue
+
+                try:
+                    retry_url = self._build_page_url(page)
+
+                    print(f"  📄 Retrying page {page}...")
+
+                    self.driver.get(retry_url)
+                    time.sleep(4)
+
+                    cards = self.extract_job_cards()
+
+                    if cards:
+                        new_cards = 0
+
+                        for card in cards:
+                            url = card.get("url")
+
+                            if url and url not in seen_urls:
+                                seen_urls.add(url)
+                                all_cards.append(card)
+                                new_cards += 1
+
+                        print(f"     ✅ Retry success: {len(cards)} jobs ({new_cards} new)")
+                    else:
+                        print(f"     ⚠️ No jobs found on retry page {page}")
+
+                except Exception as e:
+                    print(f"     ❌ Retry failed for page {page}: {e}")
+
+        print(f"\n  ✅ Total collected jobs: {len(all_cards)}")
         return all_cards
 
     # =========================
-    # استخراج جزئیات آگهی (نسخه مقاوم با Retry)
+    # استخراج جزئیات آگهی (نسخه مقاوم با Exponential Backoff)
     # =========================
-    def extract_job_detail(self, url, retry=5 , base_timeout=30):
+    def extract_job_detail(self, url, retry=5, base_timeout=30):
         """
-                استخراج جزئیات با Timeout افزایشی
+        استخراج جزئیات با Timeout افزایشی (Exponential Backoff)
     
-    Args:
-        url: لینک آگهی
-        retry: تعداد تلاش مجدد
-        base_timeout: Timeout اولیه (ثانیه)
+        Args:
+            url: لینک آگهی
+            retry: تعداد تلاش مجدد
+            base_timeout: Timeout اولیه (ثانیه)
         """
         detail = {
             'title': '',
@@ -229,9 +268,10 @@ class JobvisionScraper:
 
         for attempt in range(retry + 1):
             try:
-                timeout = base_timeout + (attempt * 10) # 30 , 40 , 50 , 60 , 70 , 80
+                timeout = base_timeout + (attempt * 10)  # 30, 40, 50, 60, 70, 80
                 self.driver.set_page_load_timeout(timeout)
                 print(f"     ⏳ Loading with {timeout}s timeout (attempt {attempt+1})")
+                
                 try:
                     self.driver.get(url)
                 except Exception as e:
