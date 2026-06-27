@@ -20,6 +20,11 @@ from matcher import (
     semantic_match_score,
     calculate_outlier_score
 )
+from utils.cache import (
+    cache_exists,
+    load_jobs_cache,
+    save_jobs_cache,
+)
 
 from scrapers import JobvisionScraper, EEstekhdamScraper
 from report import generate_html_report
@@ -200,9 +205,22 @@ def main():
             if site['type'] == 'jobvision':
                 scraper = JobvisionScraper(driver)
 
-                jobs = scraper.extract_all_pages(
-                    max_pages=site.get('max_pages', 100)
-                )
+                # -----------------------------
+                # Load jobs from cache if exists
+                # -----------------------------
+                if cache_exists(site['name']):
+                    print(f"\n📂 Loading cached jobs for {site['name']}...")
+                    jobs = load_jobs_cache(site['name'])
+
+                else:
+                    print(f"\n🌐 No cache found. Scraping pages...")
+
+                    jobs = scraper.extract_all_pages(
+                        max_pages=site.get('max_pages', 100)
+                    )
+
+                    if jobs:
+                        save_jobs_cache(site['name'], jobs)
 
                 if not jobs:
                     print("⚠️ No jobs found")
