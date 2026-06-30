@@ -57,6 +57,45 @@ jobs:
           echo ""
 
       # ==========================================
+      # 🔐 رمزگشایی کش فایل‌ها
+      # ==========================================
+      - name: Decrypt cache
+        env:
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+        run: |
+          python -c "
+          from cryptography.fernet import Fernet
+          import os
+
+          key = os.environ.get('ENCRYPTION_KEY')
+          if not key:
+              print('❌ ENCRYPTION_KEY not found!')
+              exit(1)
+
+          cipher = Fernet(key.encode())
+
+          cache_dir = 'cache'
+          if not os.path.exists(cache_dir):
+              os.makedirs(cache_dir)
+              print('📁 Cache directory created')
+
+          for file in os.listdir(cache_dir):
+              if file.endswith('.enc'):
+                  enc_path = os.path.join(cache_dir, file)
+                  dec_path = os.path.join(cache_dir, file.replace('.enc', ''))
+
+                  with open(enc_path, 'rb') as f:
+                      encrypted = f.read()
+
+                  decrypted = cipher.decrypt(encrypted)
+
+                  with open(dec_path, 'wb') as f:
+                      f.write(decrypted)
+
+                  print(f'✅ Decrypted cache: {file} -> {file.replace(".enc", "")}')
+          "
+
+      # ==========================================
       # 🔐 رمزگشایی فایل‌های تنظیمات
       # ==========================================
       - name: Decrypt config files
