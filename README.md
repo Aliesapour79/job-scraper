@@ -2,8 +2,6 @@
 
 ## 📘 AI Job Intelligence System (Reverse ATS v7)
 ---
-📘 AI Job Intelligence System (Reverse ATS v7)
----
 ## 🧠 Overview
 
 **AI Job Intelligence System** is a multi-source job analysis and ranking engine that scrapes job listings, processes them using NLP techniques, and ranks them based on semantic relevance to a target resume.
@@ -18,6 +16,12 @@ It is designed to:
 * Rank jobs using a hybrid scoring engine
 * Provide real-time monitoring and analytical dashboards
 * Generate structured reports for decision-making
+
+---
+
+## 🌐 Live Demo
+👉 **Streamlit Dashboard:**
+[https://jobvision-analyzer.streamlit.app/](https://jobvision-analyzer.streamlit.app/)
 
 ---
 
