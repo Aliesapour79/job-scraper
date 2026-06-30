@@ -180,7 +180,7 @@ with st.sidebar:
             with st.spinner("⏳ در حال ارسال درخواست به گیت‌هاب..."):
                 try:
                     response = requests.post(
-                        "https://api.github.com/repos/Aliesapour79/job-scraper/actions/workflows/run-scraper.yml/dispatches",
+                        "https://api.github.com/repos/Aliesapour79/job-scraper/actions/workflows/job-matcher.yml/dispatches",
                         headers={
                             "Authorization": f"token {st.secrets['github']['token']}",
                             "Accept": "application/vnd.github.v3+json"
