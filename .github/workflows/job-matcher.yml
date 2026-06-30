@@ -1,18 +1,16 @@
-name: Job Matcher - Daily Run
+name: Run Job Scraper
 
 on:
-  schedule:
-    - cron: '0 0 */3 * *'   # هر ۳ روز یکبار ساعت ۰۰:۰۰
-  workflow_dispatch:
+  workflow_dispatch:  # ✅ فقط با دکمه اجرا میشه
+
 jobs:
-  job-matcher:
-    name: Match Jobs with Resume (Multi-Site)
+  run-scraper:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Chrome
         run: |
           sudo apt-get update
@@ -20,12 +18,12 @@ jobs:
           wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
           google-chrome --version
-      
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: Cache HuggingFace models
         uses: actions/cache@v3
         with:
@@ -33,7 +31,7 @@ jobs:
           key: ${{ runner.os }}-hf-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-hf-
-      
+
       - name: Cache pip packages
         uses: actions/cache@v3
         with:
@@ -41,16 +39,18 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-      
+
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-      
-      - name: Run job matcher (Multi-Site)
+
+      - name: Run main.py
+        env:
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
           python main.py
-      
+
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
@@ -58,56 +58,14 @@ jobs:
           path: |
             output/job_matches_v7_*.json
             output/job_report_v7_*.html
-            data/jobs.db 
+            data/jobs.db
             partial/partial_*.json
           retention-days: 30
-      
-      - name: Send results to Telegram
-        if: success()
+
+      - name: Commit and push changes
         run: |
-          python -c '
-          import requests
-          import glob
-          import datetime
-          import os
-          TOKEN = "'"${{ secrets.TELEGRAM_BOT_TOKEN }}"'"
-          CHAT_ID = "'"${{ secrets.TELEGRAM_CHAT_ID }}"'"
-          if TOKEN != "" and CHAT_ID != "":
-              files = glob.glob("output/job_report_v7_*.html")
-              if files:
-                  for f in files:
-                      with open(f, "rb") as file:
-                          now = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
-                          caption = f"📊 گزارش تطبیق شغلی v7 (Multi-Site: e-estekhdam + Jobvision) - {now}"
-                          requests.post(
-                              f"https://api.telegram.org/bot{TOKEN}/sendDocument",
-                              data={"chat_id": CHAT_ID, "caption": caption},
-                              files={"document": file}
-                          )
-                  print("✅ فایل HTML به تلگرام ارسال شد.")
-              else:
-                  print("⚠️ هیچ فایل HTML پیدا نشد!")
-          else:
-              print("⚠️ توکن یا آیدی تلگرام تنظیم نشده است!")
-          '
-      
-      - name: Send error to Telegram
-        if: failure()
-        run: |
-          python -c '
-          import requests
-          import datetime
-          import os
-          TOKEN = "'"${{ secrets.TELEGRAM_BOT_TOKEN }}"'"
-          CHAT_ID = "'"${{ secrets.TELEGRAM_CHAT_ID }}"'"
-          if TOKEN != "" and CHAT_ID != "":
-              now = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
-              msg = f"❌ تطبیق شغلی v7 (Multi-Site) در تاریخ {now} با خطا مواجه شد!"
-              requests.post(
-                  f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-                  data={"chat_id": CHAT_ID, "text": msg}
-              )
-              print("✅ پیام خطا به تلگرام ارسال شد.")
-          else:
-              print("⚠️ توکن یا آیدی تلگرام تنظیم نشده است!")
-          '
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/jobs.db output/ partial/ || true
+          git commit -m "Auto-update from scraper [skip ci]" || echo "No changes to commit"
+          git push

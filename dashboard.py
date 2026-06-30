@@ -6,6 +6,7 @@ import plotly.express as px
 from datetime import datetime
 import os
 import tempfile
+import requests
 from utils.decrypt import decrypt_data, decrypt_file_to_string
 
 # =========================
@@ -110,6 +111,12 @@ section[data-testid="stSidebar"]{
 """, unsafe_allow_html=True)
 
 # =========================
+# 🔐 لاگین ادمین
+# =========================
+if "admin" not in st.session_state:
+    st.session_state.admin = False
+
+# =========================
 # رمزگشایی
 # =========================
 skill_enc = "matcher/skill_groups.py.enc"
@@ -147,6 +154,52 @@ def load_db():
 conn = load_db()
 if conn is None:
     st.stop()
+
+# =========================
+# سایدبار - ادمین + دکمه اجرا
+# =========================
+with st.sidebar:
+    st.markdown("### 🔐 پنل ادمین")
+    
+    if not st.session_state.admin:
+        password = st.text_input("رمز ورود", type="password")
+        if st.button("ورود"):
+            try:
+                if password == st.secrets["admin"]["password"]:
+                    st.session_state.admin = True
+                    st.rerun()
+                else:
+                    st.error("❌ رمز اشتباه است")
+            except:
+                st.error("❌ رمز در Secrets تنظیم نشده!")
+    else:
+        st.success("✅ ادمین عزیز خوش آمدی")
+        
+        # دکمه اجرا
+        if st.button("🚀 اجرای اسکرپ جدید", use_container_width=True):
+            with st.spinner("⏳ در حال ارسال درخواست به گیت‌هاب..."):
+                try:
+                    response = requests.post(
+                        "https://api.github.com/repos/Aliesapour79/job-scraper/actions/workflows/run-scraper.yml/dispatches",
+                        headers={
+                            "Authorization": f"token {st.secrets['github']['token']}",
+                            "Accept": "application/vnd.github.v3+json"
+                        },
+                        json={"ref": "main"}
+                    )
+                    if response.status_code == 204:
+                        st.success("✅ اسکرپ با موفقیت اجرا شد!")
+                        st.info("⏱️ چند دقیقه دیگه نتیجه رو در داشبورد ببین.")
+                    else:
+                        st.error(f"❌ خطا: {response.status_code} - {response.text}")
+                except Exception as e:
+                    st.error(f"❌ خطا در ارتباط با گیت‌هاب: {e}")
+        
+        if st.button("🚪 خروج", use_container_width=True):
+            st.session_state.admin = False
+            st.rerun()
+    
+    st.markdown("---")
 
 # =========================
 # هدر
