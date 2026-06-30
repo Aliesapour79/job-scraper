@@ -57,13 +57,43 @@ jobs:
           echo ""
 
       # ==========================================
-      # 🔐 رمزگشایی فایل‌ها قبل از اجرا
+      # 🔐 رمزگشایی فایل‌های تنظیمات
       # ==========================================
-      - name: Decrypt files
+      - name: Decrypt config files
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
           python decrypt_files.py
+
+      # ==========================================
+      # 🔐 رمزگشایی دیتابیس
+      # ==========================================
+      - name: Decrypt database
+        env:
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+        run: |
+          python -c "
+          from cryptography.fernet import Fernet
+          import os
+
+          key = os.environ.get('ENCRYPTION_KEY')
+          if not key:
+              print('❌ ENCRYPTION_KEY not found!')
+              exit(1)
+
+          cipher = Fernet(key.encode())
+
+          enc_path = 'data/jobs.db.enc'
+          if os.path.exists(enc_path):
+              with open(enc_path, 'rb') as f:
+                  encrypted = f.read()
+              decrypted = cipher.decrypt(encrypted)
+              with open('data/jobs.db', 'wb') as f:
+                  f.write(decrypted)
+              print('✅ Database decrypted successfully!')
+          else:
+              print('⚠️ jobs.db.enc not found, starting from scratch')
+          "
 
       - name: Run main.py
         env:
