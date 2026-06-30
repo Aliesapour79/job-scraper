@@ -45,6 +45,17 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Debug - Check encryption
+        env:
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+        run: |
+          echo "ENCRYPTION_KEY is set: ${#ENCRYPTION_KEY}"
+          echo "Checking config files..."
+          ls -la config/
+          echo "First 100 chars of settings.py.enc:"
+          cat config/settings.py.enc | head -c 100
+          echo ""
+
       - name: Run main.py
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
