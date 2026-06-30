@@ -56,6 +56,15 @@ jobs:
           cat config/settings.py.enc | head -c 100
           echo ""
 
+      # ==========================================
+      # 🔐 رمزگشایی فایل‌ها قبل از اجرا
+      # ==========================================
+      - name: Decrypt files
+        env:
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+        run: |
+          python decrypt_files.py
+
       - name: Run main.py
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
