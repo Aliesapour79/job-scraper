@@ -59,7 +59,7 @@ jobs:
             output/job_matches_v7_*.json
             output/job_report_v7_*.html
             data/jobs.db 
-            output/partial_*.json
+            partial/partial_*.json
           retention-days: 30
       
       - name: Send results to Telegram

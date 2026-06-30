@@ -1,40 +1,80 @@
-# .gitignore
+# =========================
+# 🔒 اطلاعات حساس (به گیت نمی‌رن)
+# =========================
+data/*.db
+!data/*.db.enc
+config/resume.py
+!config/resume.py.enc
+config/settings.py
+!config/settings.py.enc
+matcher/skill_groups.py
+!matcher/skill_groups.py.enc
+.env
+local.env
+*.key
+.streamlit/secrets.toml
 
 # =========================
-# محیط‌های مجازی و پایتون
+# 🐍 Python
 # =========================
-.env/
-.venv/
-venv/
-env/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+venv/
+env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
 
 # =========================
-# پوشه‌های داده و خروجی
+# 📁 دیتابیس و کش
 # =========================
-data/
-output/
+cache/
+partial/
 *.db
 *.sqlite
 *.sqlite3
 
+# 📤 خروجی‌ها
+output/
+*.html
+*.json
+!requirements.json
+
 # =========================
-# فایل‌های موقت و IDE
+# 🖥️ IDE
 # =========================
 .vscode/
 .idea/
-*.log
-*.tmp
 *.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
 
 # =========================
-# فایل‌های محیطی
+# 📊 لاگ‌ها
 # =========================
-.env
-.env.local
-.env.*.local
+*.log
+logs/
+
+# =========================
+# 📦 مدل‌ها
+# =========================
+models/
+*.safetensors
+
+# =========================
+# 🧪 فایل‌های موقت و اضافی
+# =========================
+encrypt_config_filel.py
+encrypt_files.py
+encrypt_Only_DB_file.py

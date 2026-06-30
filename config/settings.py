@@ -9,8 +9,8 @@
 # ==========================================
 SCORE_WEIGHTS = {
     'keyword': 0.0,      # حذف کامل keyword (double counting)
-    'tfidf': 0.30,       # 30% TF-IDF
-    'embedding': 0.70    # 70% Embedding (دقیق‌ترین روش)
+    'tfidf': 0.35,       # 35% TF-IDF
+    'embedding': 0.65    # 65% Embedding (دقیق‌ترین روش)
 }
 
 # ==========================================
@@ -79,8 +79,8 @@ ADMIN_KEYWORDS_WEIGHTED = {
 # وزن‌های Multi-Intent
 # ==========================================
 INTENT_WEIGHTS = {
-    'technical': 0.70,   # وزن حوزه تخصصی
-    'general': 0.30      # وزن حوزه عمومی
+    'technical': 0.65,   # وزن حوزه تخصصی
+    'general': 0.35      # وزن حوزه عمومی
 }
 
 # ==========================================

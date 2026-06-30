@@ -8,6 +8,7 @@ import json
 import hashlib
 from datetime import datetime
 import os
+from .url_normalizer import normalize_url
 
 # =========================
 # تنظیمات دیتابیس
@@ -108,7 +109,7 @@ def get_job_hash(title, company, url):
 
 def save_job(job_data):
     """
-    ذخیره یک آگهی در دیتابیس
+    ذخیره یک آگهی در دیتابیس با نرمال‌سازی URL
     
     Args:
         job_data: دیکشنری شامل اطلاعات آگهی
@@ -119,10 +120,15 @@ def save_job(job_data):
     conn = get_connection()
     cursor = conn.cursor()
 
+    # 🔥 نرمال‌سازی URL قبل از ذخیره
+    url = job_data.get('url', '')
+    normalized_url = normalize_url(url)
+    job_data['url'] = normalized_url  # ذخیره URL نرمال شده
+
     job_hash = get_job_hash(
         job_data.get('title', ''),
         job_data.get('company', ''),
-        job_data.get('url', '')
+        normalized_url
     )
 
     sections = job_data.get('sections', {})
@@ -138,7 +144,7 @@ def save_job(job_data):
         job_hash,
         job_data.get('title', ''),
         job_data.get('company', ''),
-        job_data.get('url', ''),
+        normalized_url,  # ← استفاده از URL نرمال شده
         job_data.get('location', ''),
         job_data.get('salary', ''),
         1 if job_data.get('is_urgent', False) else 0,
@@ -338,6 +344,7 @@ def get_stats():
         'category_stats': category_stats
     }
 
+
 # =========================
 # دریافت همه URLهای موجود در دیتابیس (برای چک تکراری)
 # =========================
@@ -347,14 +354,16 @@ def get_all_existing_urls():
     برای چک کردن تکراری‌ها با سرعت O(1)
     
     Returns:
-        set: مجموعه‌ای از همه URLهای موجود در دیتابیس
+        set: مجموعه‌ای از همه URLهای موجود در دیتابیس (نرمال شده)
     """
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT url FROM jobvision_jobs")
-    urls = {row[0] for row in cursor.fetchall()}
+    # 🔥 نرمال‌سازی URLها قبل از برگرداندن
+    urls = {normalize_url(row[0]) for row in cursor.fetchall() if row[0]}
     conn.close()
     return urls
+
 
 # =========================
 # تست دیتابیس
@@ -367,7 +376,7 @@ if __name__ == "__main__":
     test_job = {
         'title': 'تست برنامه نویس',
         'company': 'شرکت تست',
-        'url': 'https://test.com/job/1',
+        'url': 'https://test.com/job/1?searchId=123&score=26.52',
         'location': 'تهران',
         'salary': '50 - 70 میلیون تومان',
         'is_urgent': True,
@@ -385,6 +394,7 @@ if __name__ == "__main__":
     
     result = save_job(test_job)
     print(f"✅ Test save: {result}")
+    print(f"   Normalized URL: {test_job['url']}")
     
     stats = get_stats()
     print(f"📊 Stats: {stats}")

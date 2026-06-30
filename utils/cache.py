@@ -1,6 +1,5 @@
+# utils/cache.py
 """
-utils/cache.py
-
 مدیریت کش لیست آگهی‌های استخراج‌شده از صفحات
 """
 
@@ -8,7 +7,11 @@ import json
 import os
 from datetime import datetime
 
-CACHE_DIR = "output/cache"
+# =========================
+# 🔥 مسیر مطلق - این دیگه اشتباه نمیشه!
+# =========================
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CACHE_DIR = os.path.join(BASE_DIR, "cache")
 
 
 def ensure_cache_dir():
@@ -28,10 +31,7 @@ def cache_exists(site_name: str) -> bool:
 
 
 def save_jobs_cache(site_name: str, jobs: list):
-    """
-    ذخیره لیست آگهی‌ها در فایل کش
-    """
-
+    """ذخیره لیست آگهی‌ها در فایل کش"""
     data = {
         "site": site_name,
         "created_at": datetime.now().isoformat(),
@@ -48,13 +48,7 @@ def save_jobs_cache(site_name: str, jobs: list):
 
 
 def load_jobs_cache(site_name: str):
-    """
-    بارگذاری لیست آگهی‌ها از فایل کش
-
-    Returns:
-        list | None
-    """
-
+    """بارگذاری لیست آگهی‌ها از فایل کش"""
     path = get_cache_path(site_name)
 
     if not os.path.exists(path):
@@ -64,17 +58,13 @@ def load_jobs_cache(site_name: str):
         data = json.load(f)
 
     jobs = data.get("jobs", [])
-
     print(f"📂 Cache loaded ({len(jobs)} jobs)")
-
     return jobs
 
 
 def clear_cache(site_name: str):
     """حذف فایل کش مربوط به سایت"""
-
     path = get_cache_path(site_name)
-
     if os.path.exists(path):
         os.remove(path)
         print("🗑 Cache removed")
@@ -82,14 +72,10 @@ def clear_cache(site_name: str):
 
 def clear_all_cache():
     """حذف تمام فایل‌های کش"""
-
     ensure_cache_dir()
-
     count = 0
-
     for file in os.listdir(CACHE_DIR):
         if file.endswith(".json"):
             os.remove(os.path.join(CACHE_DIR, file))
             count += 1
-
     print(f"🗑 {count} cache file(s) removed")

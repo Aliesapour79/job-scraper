@@ -259,7 +259,7 @@ class JobvisionScraper:
     # =========================
     # استخراج جزئیات آگهی (نسخه مقاوم با Exponential Backoff)
     # =========================
-    def extract_job_detail(self, url, retry=5, base_timeout=30):
+    def extract_job_detail(self, url, retry=5, base_timeout=20):
         """
         استخراج جزئیات با Timeout افزایشی (Exponential Backoff)
     
@@ -284,7 +284,7 @@ class JobvisionScraper:
 
         for attempt in range(retry + 1):
             try:
-                timeout = base_timeout + (attempt * 15)  # 45, 55, 65, 75, 85, 95
+                timeout = base_timeout + (attempt * 25)  # 45, 55, 65, 75, 85, 95
                 self.driver.set_page_load_timeout(timeout)
                 print(f"     ⏳ Loading with {timeout}s timeout (attempt {attempt+1})")
                 

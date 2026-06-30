@@ -1,177 +1,174 @@
-# main.py
+# main.py - نسخه نهایی با امتیازدهی به همه آگهی‌ها + ذخیره در دیتابیس
 
-import json
-from datetime import datetime
 import os
-import time
-import random
+import sys
 import traceback
-from tqdm import tqdm
+import sqlite3
+from utils.decrypt import decrypt_file_to_string, decrypt_file_to_temp
 
-from config import (
-    EMBEDDING_MODEL,
-    FILTERS,
-    RESUME_TEXT
-)
+# =========================
+# 🔐 رمزگشایی فایل‌های تنظیمات
+# =========================
 
-from matcher import (
-    calculate_final_score_v63,
-    calculate_keyword_score,
-    semantic_match_score,
-    calculate_outlier_score
-)
-from utils.cache import (
-    cache_exists,
-    load_jobs_cache,
-    save_jobs_cache,
-)
+# ۱. رمزگشایی config/settings.py
+settings_enc = "config/settings.py.enc"
+if os.path.exists(settings_enc):
+    settings_content = decrypt_file_to_string(settings_enc)
+    if settings_content:
+        exec(settings_content, globals())
 
-from scrapers import JobvisionScraper, EEstekhdamScraper
-from report import generate_html_report
+# ۲. رمزگشایی config/resume.py
+resume_enc = "config/resume.py.enc"
+if os.path.exists(resume_enc):
+    resume_content = decrypt_file_to_string(resume_enc)
+    if resume_content:
+        exec(resume_content, globals())
+
+# ۳. رمزگشایی matcher/skill_groups.py
+skill_enc = "matcher/skill_groups.py.enc"
+if os.path.exists(skill_enc):
+    skill_content = decrypt_file_to_string(skill_enc)
+    if skill_content:
+        exec(skill_content, globals())
+
+# =========================
+# Imports
+# =========================
+from config import EMBEDDING_MODEL, FILTERS, RESUME_TEXT
 from matcher.semantic_matcher import SemanticMatcher
+from scrapers import JobvisionScraper
 from utils import setup_driver
+from utils.database import get_stats, init_db, get_all_jobs, save_score
+from utils.driver_manager import safe_driver_get
+
+from core import load_site_jobs, filter_new_jobs, extract_job_details, score_jobs, generate_output
+
 
 # =========================
-# 📌 اضافه کردن import دیتابیس
-# =========================
-from utils.database import save_job, get_stats, init_db, get_all_existing_urls
-
-
-# =========================
-# CONFIG (Stable Production)
+# ⚙️ تنظیمات
 # =========================
 RESTART_EVERY = 60
-SLEEP_RANGE = (2, 4)
+SLEEP_RANGE = (5, 8)
 PAGE_TIMEOUT = 90
 MAX_FAILURE_RATE = 0.25
 PARTIAL_SAVE_EVERY = 50
 MAX_EMPTY_PAGES = 2
 MAX_DRIVER_RETRIES = 3
 
-
-# =========================
-# 🎯 FLAGS: کنترل بخش‌های مختلف
-# =========================
-ENABLE_PROCESSING = False
-ENABLE_OUTPUT = False
+ENABLE_PROCESSING = True
+ENABLE_OUTPUT = True
 ENABLE_DB_SAVE = True
-
-
-# =========================
-# 🛡️ SAFE DRIVER GET (بدون ریستارت اضطراری)
-# =========================
-def safe_driver_get(driver, url, site_url, max_retries=MAX_DRIVER_RETRIES):
-    """بارگذاری URL با Retry (بدون ریستارت اضطراری)"""
-    for attempt in range(max_retries):
-        try:
-            driver.set_page_load_timeout(PAGE_TIMEOUT)
-            driver.get(url)
-            return True
-            
-        except Exception as e:
-            error_msg = str(e).lower()
-            print(f"     ⚠️ Attempt {attempt+1}/{max_retries} failed: {str(e)[:60]}")
-            
-            if "crash" in error_msg or "connection" in error_msg:
-                # فقط صبر می‌کنیم و Retry می‌کنیم (بدون ریستارت)
-                print(f"     ⏳ Retrying...")
-                time.sleep(3)
-                continue
-            else:
-                print(f"     ❌ Non-retryable error")
-                return False
-    
-    print(f"     ❌ Failed after {max_retries} attempts")
-    return False
+from tqdm import tqdm
 
 # =========================
-# DRIVER RESTART
-# =========================
-def restart_driver(driver):
-    """Restart Chrome driver to free memory"""
-    print("🔄 Restarting Chrome driver...")
-    try:
-        driver.quit()
-    except:
-        pass
-
-    time.sleep(2)
-    return setup_driver()
-
-
-# =========================
-# PARTIAL SAVE
+# 🛠️ توابع کمکی
 # =========================
 def save_partial(all_jobs, count):
-    """Save partial results to prevent data loss"""
+    """ذخیره موقت"""
+    import json
+    from datetime import datetime
     try:
-        os.makedirs("output", exist_ok=True)
+        os.makedirs("partial", exist_ok=True)
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-
-        with open(f"output/partial_{count}_{ts}.json", "w", encoding="utf-8") as f:
+        with open(f"partial/partial_{count}_{ts}.json", "w", encoding="utf-8") as f:
             json.dump(all_jobs, f, ensure_ascii=False, indent=2)
-
         print(f"💾 Partial save at {count}")
     except:
         pass
 
 
-# =========================
-# MAIN
-# =========================
-def main():
-    os.makedirs("output", exist_ok=True)
-
+def print_status():
+    """نمایش وضعیت"""
     print("=" * 80)
     print("🚀 JOB MATCHER v7 - STABLE PRODUCTION MODE")
     print("   (Multi-Site: e-estekhdam + Jobvision)")
     print("=" * 80)
-
     print(f"\n📋 MODE STATUS:")
     print(f"   🧠 Processing (Scoring): {'✅ ENABLED' if ENABLE_PROCESSING else '❌ DISABLED'}")
     print(f"   📤 Output (JSON/HTML):  {'✅ ENABLED' if ENABLE_OUTPUT else '❌ DISABLED'}")
     print(f"   💾 Database Save:      {'✅ ENABLED' if ENABLE_DB_SAVE else '❌ DISABLED'}")
     print("=" * 80)
 
-    # =========================
-    # LOAD MODEL
-    # =========================
+
+def save_scores_to_db(results):
+    """ذخیره امتیازها در دیتابیس"""
+    print("\n💾 Saving scores to database...")
+    
+    conn = sqlite3.connect("data/jobs.db")
+    cursor = conn.cursor()
+    
+    saved = 0
+    failed = 0
+    
+    for result in tqdm(results, desc="Saving scores", unit="score"):
+        try:
+            # پیدا کردن job_id بر اساس URL
+            cursor.execute("SELECT id FROM jobvision_jobs WHERE url = ?", (result.get('url'),))
+            row = cursor.fetchone()
+            
+            if row:
+                job_id = row[0]
+                score_data = {
+                    'score': result.get('score', 0),
+                    'technical_score': result.get('technical_score', 0),
+                    'general_score': result.get('general_score', 0),
+                    'embedding_score': result.get('embedding_score', 0),
+                    'tfidf_score': result.get('tfidf_score', 0),
+                    'category': result.get('category', ''),
+                    'outlier_score': result.get('outlier_score', 0)
+                }
+                save_score(job_id, score_data)
+                saved += 1
+            else:
+                failed += 1
+        except Exception as e:
+            failed += 1
+            print(f"   ⚠️ Error saving score for {result.get('title', 'Unknown')}: {e}")
+    
+    conn.close()
+    print(f"✅ Saved {saved} scores to database! (Failed: {failed})")
+
+
+# =========================
+# 🚀 MAIN
+# =========================
+def main():
+    os.makedirs("output", exist_ok=True)
+    os.makedirs("partial", exist_ok=True)
+    print_status()
+
+    # بارگذاری مدل
+    semantic_matcher = None
     if ENABLE_PROCESSING:
         print("\n🔄 Loading Semantic Model...")
         semantic_matcher = SemanticMatcher(EMBEDDING_MODEL)
-
         if not semantic_matcher.is_loaded:
             print("⚠️ Semantic matching disabled (install sentence-transformers)")
     else:
         print("\n⏭️ Skipping Semantic Model (Processing disabled)")
-        semantic_matcher = None
 
-    # =========================
-    # INIT DATABASE
-    # =========================
+    # آماده‌سازی دیتابیس
     if ENABLE_DB_SAVE:
         print("\n📁 Initializing database...")
         init_db()
         print("✅ Database ready")
 
-    # =========================
-    # SITE CONFIGURATION
-    # =========================
+    # تنظیمات سایت‌ها
     sites_config = [
-        # {
-        #     'name': 'jobvision-developer',
-        #     'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
-        #     'type': 'jobvision',
-        #     'max_pages': 100,
-        #     'job_category': 'توسعه نرم افزار و برنامه نویسی'
-        # },
-        # {
-        #     'name': 'jobvision-data-science',
-        #     'url': "https://jobvision.ir/jobs/category/data-science-in-all-cities-of-tehran",
-        #     'type': 'jobvision',
-        #     'max_pages': 100,
-        #     'job_category': 'علوم داده / هوش مصنوعی'
-        # },
+        {
+            'name': 'jobvision-developer',
+            'url': "https://jobvision.ir/jobs/category/developer-in-all-cities-of-tehran",
+            'type': 'jobvision',
+            'max_pages': 100,
+            'job_category': 'توسعه نرم افزار و برنامه نویسی'
+        },
+        {
+            'name': 'jobvision-data-science',
+            'url': "https://jobvision.ir/jobs/category/data-science-in-all-cities-of-tehran",
+            'type': 'jobvision',
+            'max_pages': 100,
+            'job_category': 'علوم داده / هوش مصنوعی'
+        },
         {
             'name': 'jobvision-secretary',
             'url': "https://jobvision.ir/jobs/category/secretary-in-all-cities-of-tehran",
@@ -189,182 +186,53 @@ def main():
     ]
 
     driver = setup_driver()
-    all_jobs = []
+    all_jobs = []  # فقط برای آگهی‌های جدید (برای استخراج)
+    
+    config = {
+        'RESTART_EVERY': RESTART_EVERY,
+        'SLEEP_RANGE': SLEEP_RANGE,
+        'MAX_FAILURE_RATE': MAX_FAILURE_RATE,
+        'PARTIAL_SAVE_EVERY': PARTIAL_SAVE_EVERY,
+        'ENABLE_DB_SAVE': ENABLE_DB_SAVE
+    }
 
     try:
+        # =========================
+        # مرحله ۱: استخراج آگهی‌های جدید
+        # =========================
         for site in sites_config:
             print(f"\n{'='*60}")
             print(f"🔄 Scraping {site['name']}")
             print(f"   URL: {site['url']}")
             print(f"{'='*60}")
 
-            if not safe_driver_get(driver, site['url'], site['url']):
+            if not safe_driver_get(driver, site['url']):
                 print(f"⚠️ Could not load {site['name']}, skipping...")
                 continue
 
-            if site['type'] == 'jobvision':
-                scraper = JobvisionScraper(driver)
+            scraper = JobvisionScraper(driver)
+            jobs = load_site_jobs(scraper, site)
 
-                # -----------------------------
-                # Load jobs from cache if exists
-                # -----------------------------
-                if cache_exists(site['name']):
-                    print(f"\n📂 Loading cached jobs for {site['name']}...")
-                    jobs = load_jobs_cache(site['name'])
+            if not jobs:
+                print("⚠️ No jobs found")
+                continue
 
-                else:
-                    print(f"\n🌐 No cache found. Scraping pages...")
+            print(f"🔍 {len(jobs)} jobs found")
 
-                    jobs = scraper.extract_all_pages(
-                        max_pages=site.get('max_pages', 100)
-                    )
+            jobs = filter_new_jobs(jobs, ENABLE_DB_SAVE)
+            if not jobs:
+                continue
 
-                    if jobs:
-                        save_jobs_cache(site['name'], jobs)
-
-                if not jobs:
-                    print("⚠️ No jobs found")
-                    continue
-
-                print(f"🔍 {len(jobs)} jobs found")
-
-                # =========================
-                # 🔍 فیلتر تکراری‌ها با استفاده از Set (O(1))
-                # =========================
-                if ENABLE_DB_SAVE:
-                    print("\n🔍 Loading existing URLs from database...")
-                    existing_urls = get_all_existing_urls()
-                    print(f"   📋 {len(existing_urls)} existing jobs in DB")
-                    
-                    original_count = len(jobs)
-                    
-                    # فیلتر کردن با Set (خیلی سریع - O(1))
-                    jobs = [job for job in jobs if job['url'] not in existing_urls]
-                    
-                    skipped = original_count - len(jobs)
-                    print(f"   ✅ {len(jobs)} new jobs | ⏭️ {skipped} duplicates skipped")
-                    
-                    if not jobs:
-                        print(f"⚠️ No new jobs for {site['name']}, skipping to next site...")
-                        continue
-                    
-                    print(f"\n📥 Extracting details for {len(jobs)} new jobs...")
-                else:
-                    print(f"\n📥 Extracting details for {len(jobs)} jobs...")
-
-                # =========================
-                # شروع استخراج جزئیات فقط برای آگهی‌های جدید
-                # =========================
-                successful = 0
-                failed = 0
-                db_saved = 0
-                db_duplicate = 0
-
-                for i, job in enumerate(tqdm(jobs, desc=f"Extracting {site['name']}", unit="job")):
-                    idx = i + 1
-
-                    if idx > 20 and failed / idx > MAX_FAILURE_RATE:
-                        print(f"⚠️ Failure rate too high ({failed}/{idx}), stopping batch")
-                        break
-
-                    if idx % RESTART_EVERY == 0:
-                        print(f"     🔄 Restart at {idx}...")
-                        driver = restart_driver(driver)
-                        scraper = JobvisionScraper(driver)
-                        driver.get(site['url'])
-                        time.sleep(3)
-
-                    try:
-                        if not safe_driver_get(driver, job['url'], site['url']):
-                            failed += 1
-                            print(f"     ❌ Skipping job {idx} (page load failed)")
-                            continue
-
-                        detail = scraper.extract_job_detail(job['url'])
-                        driver.get('about:blank')
-
-                        if not detail or detail.get("error"):
-                            failed += 1
-                            continue
-
-                        job['sections'] = {
-                            'full_text': detail.get('full_text', ''),
-                            'title': job.get('title', ''),
-                            'description': detail.get('description', ''),
-                            'requirements': detail.get('requirements', ''),
-                            'company': job.get('company', '')
-                        }
-
-                        job['skills'] = detail.get('skills', [])
-                        job['site'] = site['name']
-                        job['job_category'] = site.get('job_category', '')
-                        
-                        all_jobs.append(job)
-                        successful += 1
-
-                        if ENABLE_DB_SAVE:
-                            result = save_job(job)
-                            if result:
-                                db_saved += 1
-                            else:
-                                db_duplicate += 1
-
-                    except Exception as e:
-                        failed += 1
-                        msg = str(e).lower()
-                        print(f"     ❌ Error on job {idx}: {msg[:80]}")
-
-                        if "crash" in msg:
-                            driver = restart_driver(driver)
-                            scraper = JobvisionScraper(driver)
-                            driver.get(site['url'])
-                            time.sleep(3)
-
-                    finally:
-                        time.sleep(random.uniform(*SLEEP_RANGE))
-
-                    if idx % PARTIAL_SAVE_EVERY == 0:
-                        save_partial(all_jobs, idx)
-
-                print(f"✅ Done: {successful} success | {failed} failed | DB Saved: {db_saved} | DB Duplicate: {db_duplicate}")
-                print(f"✅ Extracted {successful} jobs from {site['name']}")
-
-            elif site['type'] == 'e_estekhdam':
-                scraper = EEstekhdamScraper(driver)
-                scraper.url = site['url']
-                jobs = scraper.extract_all_jobs()
-
-                if not jobs:
-                    print("⚠️ No jobs found")
-                    continue
-
-                print(f"✅ Extracted {len(jobs)} jobs from {site['name']}")
-                
-                db_saved = 0
-                db_duplicate = 0
-                
-                for job in tqdm(jobs, desc=f"Saving {site['name']} to DB", unit="job"):
-                    job['site'] = site['name']
-                    job['job_category'] = site.get('job_category', '')
-                    all_jobs.append(job)
-                    
-                    if ENABLE_DB_SAVE:
-                        result = save_job(job)
-                        if result:
-                            db_saved += 1
-                        else:
-                            db_duplicate += 1
-                
-                print(f"   💾 DB Saved: {db_saved} | DB Duplicate: {db_duplicate}")
+            all_jobs, driver = extract_job_details(jobs, site, driver, all_jobs, config, save_partial)
 
         # =========================
-        # FINAL CHECK
+        # مرحله ۲: چک کردن وجود آگهی
         # =========================
         if not all_jobs:
-            print("❌ No jobs found")
-            return
-
-        print(f"\n✅ TOTAL JOBS EXTRACTED: {len(all_jobs)}")
+            print("⚠️ No new jobs extracted.")
+            print("📊 But we can still score all jobs in database!")
+        
+        print(f"\n✅ NEW JOBS EXTRACTED: {len(all_jobs)}")
 
         if ENABLE_DB_SAVE:
             stats = get_stats()
@@ -378,141 +246,31 @@ def main():
         if not ENABLE_PROCESSING:
             print("\n⏭️ Processing (Scoring) is DISABLED.")
             print("   Data extracted successfully. Run with ENABLE_PROCESSING=True to score.")
-            print(f"   Extracted {len(all_jobs)} jobs ready for processing.")
             return
 
         # =========================
-        # SCORING (اگر فعال باشد)
+        # مرحله ۳: امتیازدهی به همه آگهی‌های دیتابیس
         # =========================
-        print("\n🔄 Calculating match scores...")
-        print("   This may take a few minutes...")
-
-        job_texts = []
-        for job in all_jobs:
-            s = job.get('sections', {})
-            job_texts.append(
-                f"{s.get('title','')} {s.get('description','')} {s.get('requirements','')}"
-            )
-
-        print("  🧠 Running embeddings...")
-        embedding_scores = (
-            semantic_matcher.calculate_batch_similarity(job_texts, RESUME_TEXT)
-            if semantic_matcher.is_loaded
-            else [0] * len(all_jobs)
-        )
-
-        print("  📊 Scoring jobs...")
-        results = []
-        all_scores = []
-        all_tfidf_scores = []
-
-        for idx, job in enumerate(tqdm(all_jobs, desc="Scoring jobs", unit="job")):
-            s = job.get('sections', {})
-
-            keyword_score, matched_keywords, _ = calculate_keyword_score(
-                s.get('full_text', ''),
-                s.get('requirements', ''),
-                s.get('description', ''),
-                s.get('title', '')
-            )
-
-            tfidf_score = semantic_match_score(
-                f"{s.get('title','')} {s.get('description','')}",
-                RESUME_TEXT,
-                matched_keywords
-            )
-
-            all_tfidf_scores.append(tfidf_score)
-
-            scores = calculate_final_score_v63(
-                idx=idx,
-                job_text=job_texts[idx],
-                resume_text=RESUME_TEXT,
-                embedding_score=embedding_scores[idx],
-                tfidf_score=tfidf_score,
-                all_embedding_scores=embedding_scores,
-                all_tfidf_scores=all_tfidf_scores,
-                semantic_matcher=semantic_matcher,
-                job_title=job.get('title', '')
-            )
-
-            final = scores['final']
-            all_scores.append(final)
-
-            results.append({
-                "title": job.get('title', 'Unknown'),
-                "company": job.get('company', 'Unknown'),
-                "url": job.get('url', ''),
-                "site": job.get('site', 'unknown'),
-                "score": final,
-                "technical_score": scores.get('technical', 0),
-                "general_score": scores.get('general', 0),
-                "embedding_score": int(embedding_scores[idx]),
-                "tfidf_score": int(tfidf_score),
-                "keyword_score": keyword_score,
-                "matched_skills": matched_keywords,
-                "category": scores.get('category', 'technical'),
-                "penalty": scores.get('penalty', 0),
-                "boost": scores.get('boost', 0),
-                "description_preview": s.get('description', '')[:300],
-                "error": job.get('error', None)
-            })
-
-        print("  📊 Calculating outlier scores...")
-        for r in results:
-            r['outlier_score'] = calculate_outlier_score(all_scores, r['score'])
-
-        min_score = FILTERS.get('min_score', 20)
-        filtered = [r for r in results if r['score'] >= min_score]
-        filtered.sort(key=lambda x: x['score'], reverse=True)
-
-        if not ENABLE_OUTPUT:
-            print("\n⏭️ Output (JSON/HTML) is DISABLED.")
-            print(f"   Scores calculated for {len(filtered)} relevant jobs.")
-            print("   Run with ENABLE_OUTPUT=True to generate files.")
-            return
-
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-
-        json_file = f"output/job_matches_v7_{ts}.json"
-        html_file = f"output/job_report_v7_{ts}.html"
-
-        with open(json_file, "w", encoding="utf-8") as f:
-            json.dump(filtered, f, ensure_ascii=False, indent=2)
-
-        generate_html_report(filtered, html_file)
-
-        tech_count = sum(1 for r in filtered if r.get('category') == 'technical')
-        admin_count = sum(1 for r in filtered if r.get('category') == 'administrative')
-        hybrid_count = sum(1 for r in filtered if r.get('category') == 'hybrid')
-
-        site_stats = {}
-        for r in filtered:
-            site = r.get('site', 'unknown')
-            site_stats[site] = site_stats.get(site, 0) + 1
-
         print("\n" + "=" * 80)
-        print(f"📁 JSON saved: {json_file}")
-        print(f"📄 HTML saved: {html_file}")
+        print("📊 SCORING ALL JOBS IN DATABASE")
         print("=" * 80)
-
-        print(f"\n🎯 Found {len(filtered)} relevant jobs out of {len(all_jobs)} total")
-        print(f"   🔧 Technical: {tech_count} | 🧾 Admin: {admin_count} | 🔀 Hybrid: {hybrid_count}")
-        print(f"   📍 By site: {site_stats}")
-        print("=" * 80)
-
-        if filtered:
-            print("\n🏆 TOP 10 MATCHING JOBS:\n")
-            for i, job in enumerate(filtered[:10], 1):
-                category_icon = "🔧" if job.get('category') == 'technical' else "🧾" if job.get('category') == 'administrative' else "🔀"
-                site_tag = f"[{job.get('site', 'unknown')}]"
-
-                print(f"{i}. {category_icon} {site_tag} {job['score']}% - {job['title']}")
-                print(f"   🏢 {job['company']}")
-                print(f"   🎯 Technical: {job.get('technical_score', 0)}% | 📋 General: {job.get('general_score', 0)}%")
-                print(f"   📊 Outlier: {job.get('outlier_score', 0)}%")
-                print(f"   🛠️  Skills: {', '.join(job.get('matched_skills', [])[:5])}")
-                print()
+        
+        # گرفتن همه آگهی‌ها از دیتابیس
+        all_db_jobs = get_all_jobs(limit=10000)
+        print(f"📋 Total jobs in database: {len(all_db_jobs)}")
+        
+        if not all_db_jobs:
+            print("❌ No jobs in database to score!")
+            return
+        
+        # امتیازدهی به همه
+        results = score_jobs(all_db_jobs, semantic_matcher, RESUME_TEXT)
+        generate_output(results, FILTERS, ENABLE_OUTPUT)
+        
+        # =========================
+        # 🔥 مرحله ۴: ذخیره امتیازها در دیتابیس
+        # =========================
+        save_scores_to_db(results)
 
     except Exception as e:
         print(f"\n❌ Fatal error: {e}")
@@ -542,9 +300,8 @@ def main():
 
         print(f"\n💾 Database: data/jobs.db")
         print(f"📁 Output: output/")
+        print(f"📁 Partial: partial/")
         print("\n" + "=" * 80)
-
-        input("\nPress ENTER to exit...")
         print("✅ Browser closed")
 
 
