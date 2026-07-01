@@ -8,10 +8,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Chrome
+      # ==========================================
+      # Chrome
+      # ==========================================
+      - name: Setup Google Chrome
         run: |
           sudo apt-get update
           sudo apt-get install -y wget unzip
@@ -19,172 +22,199 @@ jobs:
           sudo dpkg -i google-chrome-stable_current_amd64.deb || sudo apt-get install -f -y
           google-chrome --version
 
+      # ==========================================
+      # Python
+      # ==========================================
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Cache HuggingFace models
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/huggingface
-          key: ${{ runner.os }}-hf-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-hf-
-
-      - name: Cache pip packages
-        uses: actions/cache@v3
+      # ==========================================
+      # Cache pip
+      # ==========================================
+      - name: Cache pip
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install dependencies
+      # ==========================================
+      # Cache HuggingFace
+      # ==========================================
+      - name: Cache HuggingFace
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-hf-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-hf-
+
+      # ==========================================
+      # Install
+      # ==========================================
+      - name: Install requirements
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Debug - Check encryption
+      # ==========================================
+      # Debug
+      # ==========================================
+      - name: Debug Encryption
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
-          echo "ENCRYPTION_KEY is set: ${#ENCRYPTION_KEY}"
-          echo "Checking config files..."
-          ls -la config/
-          echo "First 100 chars of settings.py.enc:"
-          cat config/settings.py.enc | head -c 100
-          echo ""
+          echo "Key length = ${#ENCRYPTION_KEY}"
+          ls -la config
+          ls -la data
+          ls -la cache || true
 
       # ==========================================
-      # 🔐 رمزگشایی کش فایل‌ها
+      # Decrypt Cache
       # ==========================================
-      - name: Decrypt cache
+      - name: Decrypt Cache
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
-          python -c "
+          python << 'EOF'
           from cryptography.fernet import Fernet
           import os
 
-          key = os.environ.get('ENCRYPTION_KEY')
-          if not key:
-              print('❌ ENCRYPTION_KEY not found!')
-              exit(1)
-
+          key = os.environ["ENCRYPTION_KEY"]
           cipher = Fernet(key.encode())
 
-          cache_dir = 'cache'
-          if not os.path.exists(cache_dir):
-              os.makedirs(cache_dir)
-              print('📁 Cache directory created')
+          os.makedirs("cache", exist_ok=True)
 
-          for file in os.listdir(cache_dir):
-              if file.endswith('.enc'):
-                  enc_path = os.path.join(cache_dir, file)
-                  dec_path = os.path.join(cache_dir, file.replace('.enc', ''))
+          for file in os.listdir("cache"):
+              if not file.endswith(".enc"):
+                  continue
 
-                  with open(enc_path, 'rb') as f:
-                      encrypted = f.read()
+              enc = os.path.join("cache", file)
+              dec_name = file.replace(".enc", "")
+              dec = os.path.join("cache", dec_name)
 
-                  decrypted = cipher.decrypt(encrypted)
+              with open(enc, "rb") as f:
+                  encrypted = f.read()
 
-                  with open(dec_path, 'wb') as f:
-                      f.write(decrypted)
+              decrypted = cipher.decrypt(encrypted)
 
-                  print(f'✅ Decrypted cache: {file} -> {file.replace(".enc", "")}')
-          "
+              with open(dec, "wb") as f:
+                  f.write(decrypted)
+
+              print(f"✅ {file} -> {dec_name}")
+
+          print("✅ Cache decrypted")
+          EOF
 
       # ==========================================
-      # 🔐 رمزگشایی فایل‌های تنظیمات
+      # Decrypt Config
       # ==========================================
-      - name: Decrypt config files
+      - name: Decrypt Config
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
           python decrypt_files.py
 
       # ==========================================
-      # 🔐 رمزگشایی دیتابیس
+      # Decrypt Database
       # ==========================================
-      - name: Decrypt database
+      - name: Decrypt Database
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
-          python -c "
+          python << 'EOF'
           from cryptography.fernet import Fernet
           import os
 
-          key = os.environ.get('ENCRYPTION_KEY')
-          if not key:
-              print('❌ ENCRYPTION_KEY not found!')
-              exit(1)
-
+          key = os.environ["ENCRYPTION_KEY"]
           cipher = Fernet(key.encode())
 
-          enc_path = 'data/jobs.db.enc'
-          if os.path.exists(enc_path):
-              with open(enc_path, 'rb') as f:
-                  encrypted = f.read()
-              decrypted = cipher.decrypt(encrypted)
-              with open('data/jobs.db', 'wb') as f:
-                  f.write(decrypted)
-              print('✅ Database decrypted successfully!')
-          else:
-              print('⚠️ jobs.db.enc not found, starting from scratch')
-          "
+          enc_db = "data/jobs.db.enc"
+          db = "data/jobs.db"
 
-      - name: Run main.py
+          if os.path.exists(enc_db):
+
+              with open(enc_db, "rb") as f:
+                  encrypted = f.read()
+
+              decrypted = cipher.decrypt(encrypted)
+
+              with open(db, "wb") as f:
+                  f.write(decrypted)
+
+              print("✅ Database decrypted")
+
+          else:
+              print("⚠️ jobs.db.enc not found")
+          EOF
+
+      # ==========================================
+      # Run Main
+      # ==========================================
+      - name: Run Scraper
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
           python main.py
 
-      - name: Upload results (Artifact)
+      # ==========================================
+      # Upload Artifacts
+      # ==========================================
+      - name: Upload Results
         uses: actions/upload-artifact@v4
         with:
-          name: job-matches
+          name: job-results
           path: |
-            output/job_matches_v7_*.json
-            output/job_report_v7_*.html
+            output/
+            partial/
             data/jobs.db
-            partial/partial_*.json
           retention-days: 30
 
       # ==========================================
-      # 🔐 رمزنگاری دیتابیس و Commit به ریپازیتوری
+      # Encrypt Database
       # ==========================================
-      - name: Encrypt database and commit
+      - name: Encrypt Database
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
-          # رمزنگاری دیتابیس (با استفاده از کلید)
-          python -c "
+          python << 'EOF'
           from cryptography.fernet import Fernet
           import os
 
-          key = os.environ.get('ENCRYPTION_KEY')
-          if not key:
-              print('❌ ENCRYPTION_KEY not found!')
-              exit(1)
-
+          key = os.environ["ENCRYPTION_KEY"]
           cipher = Fernet(key.encode())
 
-          db_path = 'data/jobs.db'
-          if os.path.exists(db_path):
-              with open(db_path, 'rb') as f:
-                  data = f.read()
-              encrypted = cipher.encrypt(data)
-              with open('data/jobs.db.enc', 'wb') as f:
-                  f.write(encrypted)
-              print('✅ Database encrypted successfully!')
-          else:
-              print('⚠️ jobs.db not found, skipping encryption')
-          "
+          db = "data/jobs.db"
 
-          # Commit و Push
+          if os.path.exists(db):
+
+              with open(db, "rb") as f:
+                  raw = f.read()
+
+              encrypted = cipher.encrypt(raw)
+
+              with open("data/jobs.db.enc", "wb") as f:
+                  f.write(encrypted)
+
+              print("✅ Database encrypted")
+
+          else:
+              print("⚠️ jobs.db not found")
+          EOF
+
+      # ==========================================
+      # Commit
+      # ==========================================
+      - name: Commit Updated Database
+        run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add data/jobs.db.enc
-          git commit -m "Auto-update encrypted database [skip ci]" || echo "No changes to commit"
+
+          git diff --cached --quiet || git commit -m "Auto update encrypted database [skip ci]"
+
           git push
