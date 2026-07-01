@@ -109,7 +109,26 @@ section[data-testid="stSidebar"]{
 }
 </style>
 """, unsafe_allow_html=True)
-
+def get_last_update_time():
+    """دریافت آخرین زمان بروزرسانی دیتابیس"""
+    try:
+        conn = sqlite3.connect("data/jobs.db")
+        cursor = conn.cursor()
+        
+        # دریافت آخرین زمان scraped_at از جدول jobs
+        cursor.execute("""
+            SELECT MAX(scraped_at) 
+            FROM jobvision_jobs
+        """)
+        result = cursor.fetchone()[0]
+        conn.close()
+        
+        if result:
+            return datetime.strptime(result, '%Y-%m-%d %H:%M:%S')
+        else:
+            return datetime.now()
+    except:
+        return datetime.now()
 # =========================
 # 🔐 لاگین ادمین (کشویی)
 # =========================
@@ -218,8 +237,8 @@ st.markdown("""
 col1, col2 = st.columns([3,1])
 
 with col1:
-    st.caption(f"📅 آخرین بروزرسانی : {datetime.now():%Y/%m/%d %H:%M}")
-
+    last_update = get_last_update_time()
+    st.caption(f"📅 آخرین بروزرسانی : {last_update:%Y/%m/%d %H:%M}")
 with col2:
     st.success("🟢 System Online")
 
