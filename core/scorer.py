@@ -1,7 +1,7 @@
 # core/scorer.py
 from tqdm import tqdm
 
-from matcher import calculate_final_score_v63, calculate_keyword_score, semantic_match_score, calculate_outlier_score
+from matcher import calculate_final_score_v73, calculate_keyword_score, semantic_match_score, calculate_outlier_score
 
 
 def convert_db_row_to_job(row):
@@ -89,7 +89,7 @@ def score_jobs(all_jobs, semantic_matcher, resume_text):
 
         all_tfidf_scores.append(tfidf_score)
 
-        scores = calculate_final_score_v63(
+        scores = calculate_final_score_v73(
             idx=idx,
             job_text=job_texts[idx],
             resume_text=resume_text,

@@ -168,83 +168,196 @@ def detect_job_category(job_title, job_text, technical_score, general_score):
     
     return "technical"  # پیش‌فرض
 
-def calculate_final_score_v63(idx, job_text, resume_text, embedding_score, tfidf_score, 
-                              all_embedding_scores, all_tfidf_scores, semantic_matcher=None, job_title=""):
+# def calculate_final_score_v63(idx, job_text, resume_text, embedding_score, tfidf_score, 
+#                               all_embedding_scores, all_tfidf_scores, semantic_matcher=None, job_title=""):
+#     """
+#     محاسبه امتیاز نهایی با سیستم Dual Track + Hybrid
+#     نسخه v7:
+#     1. Technical Track: برای مشاغل فنی
+#     2. Admin Track: برای مشاغل اداری با حداقل ۳۰% نمایش
+#     3. Hybrid: برای مشاغل ترکیبی (پشتیبانی فنی)
+#     """
+#     from config import SCORE_WEIGHTS, INTENT_WEIGHTS
+    
+#     # ====== Scale-Aware Normalization ======
+#     norm_embedding = embedding_score / 100.0
+#     norm_tfidf = min(tfidf_score / 20.0, 1.0)
+    
+#     # ====== Technical Score ======
+#     technical_score = (norm_embedding * 0.7 + norm_tfidf * 0.3) * 100
+    
+#     # ====== General Score ======
+#     general_score = calculate_general_score(job_text, job_title)
+    
+#     # ====== Boost ======
+#     boost = domain_boost(job_text, resume_text, semantic_matcher)
+    
+#     # ====== Penalty ======
+#     penalty = generic_penalty(job_text)
+#     penalty_percent = int(penalty * 100)
+    
+#     # ====== تشخیص دسته‌بندی شغل ======
+#     category = detect_job_category(job_title, job_text, technical_score, general_score)
+    
+#     # ====== محاسبه امتیاز بر اساس دسته‌بندی ======
+    
+#     # Technical Track: امتیاز فنی با تأثیر کم General
+#     technical_final = (0.7 * technical_score) + (0.3 * general_score)
+#     technical_final = technical_final + (boost * 0.5)
+#     technical_final = technical_final * (1 - penalty)
+    
+#     # Admin Track: امتیاز اداری با تأثیر بیشتر General
+#     admin_final = (0.3 * technical_score) + (0.7 * general_score)
+#     admin_final = admin_final + (boost * 0.3)
+#     admin_final = admin_final * (1 - penalty * 0.7)  # Penalty کمتر برای اداری‌ها
+    
+#     # Hybrid Track: ترکیب متعادل
+#     hybrid_final = (0.5 * technical_score) + (0.5 * general_score)
+#     hybrid_final = hybrid_final + (boost * 0.5)
+#     hybrid_final = hybrid_final * (1 - penalty * 0.8)
+    
+#     # ====== انتخاب امتیاز نهایی بر اساس دسته‌بندی ======
+#     if category == "technical":
+#         final_score = technical_final
+#     elif category == "administrative":
+#         final_score = admin_final
+#         # Admin Safety Layer: حداقل ۳۰% برای نمایش
+#         final_score = max(final_score, 30)
+#         # Admin Cap: حداکثر ۵۵% (برای جلوگیری از dominance)
+#         final_score = min(final_score, 55)
+#     else:  # hybrid
+#         final_score = hybrid_final
+    
+#     # ====== اطمینان از محدوده ۰-۱۰۰ ======
+#     final_score = int(min(100, max(0, final_score)))
+    
+#     # ====== امتیازهای جداگانه برای نمایش ======
+#     return {
+#         'final': final_score,
+#         'technical': int(technical_score),
+#         'general': int(general_score),
+#         'boost': boost,
+#         'penalty': penalty_percent,
+#         'category': category,
+#         'technical_score_raw': int(technical_final),
+#         'admin_score_raw': int(admin_final),
+#         'hybrid_score_raw': int(hybrid_final)
+#     }
+
+def calculate_final_score_v73(
+    idx,
+    job_text,
+    resume_text,
+    embedding_score,
+    tfidf_score,
+    all_embedding_scores,
+    all_tfidf_scores,
+    semantic_matcher=None,
+    job_title=""
+):
     """
-    محاسبه امتیاز نهایی با سیستم Dual Track + Hybrid
-    نسخه v7:
-    1. Technical Track: برای مشاغل فنی
-    2. Admin Track: برای مشاغل اداری با حداقل ۳۰% نمایش
-    3. Hybrid: برای مشاغل ترکیبی (پشتیبانی فنی)
+    نسخه نهایی تمیز شده (Production Safe)
+    معماری:
+    Semantic (Embedding) + Technical (TF-IDF) + General + Boost/Penalty
     """
-    from config import SCORE_WEIGHTS, INTENT_WEIGHTS
-    
-    # ====== Scale-Aware Normalization ======
-    norm_embedding = embedding_score / 100.0
-    norm_tfidf = min(tfidf_score / 20.0, 1.0)
-    
-    # ====== Technical Score ======
-    technical_score = (norm_embedding * 0.7 + norm_tfidf * 0.3) * 100
-    
-    # ====== General Score ======
+
+    # =========================
+    # 📊 Core Signals
+    # =========================
+
+    # ❗ مهم: embedding فقط در semantic استفاده می‌شود
     general_score = calculate_general_score(job_text, job_title)
-    
-    # ====== Boost ======
+
+    keyword_score, matched_keywords, group_results = calculate_keyword_score(
+        job_text, "", job_text, job_title
+    )
+
     boost = domain_boost(job_text, resume_text, semantic_matcher)
-    
-    # ====== Penalty ======
+    boost = min(max(boost, 0), 15)
+
     penalty = generic_penalty(job_text)
     penalty_percent = int(penalty * 100)
-    
-    # ====== تشخیص دسته‌بندی شغل ======
-    category = detect_job_category(job_title, job_text, technical_score, general_score)
-    
-    # ====== محاسبه امتیاز بر اساس دسته‌بندی ======
-    
-    # Technical Track: امتیاز فنی با تأثیر کم General
-    technical_final = (0.7 * technical_score) + (0.3 * general_score)
-    technical_final = technical_final + (boost * 0.5)
-    technical_final = technical_final * (1 - penalty)
-    
-    # Admin Track: امتیاز اداری با تأثیر بیشتر General
-    admin_final = (0.3 * technical_score) + (0.7 * general_score)
-    admin_final = admin_final + (boost * 0.3)
-    admin_final = admin_final * (1 - penalty * 0.7)  # Penalty کمتر برای اداری‌ها
-    
-    # Hybrid Track: ترکیب متعادل
-    hybrid_final = (0.5 * technical_score) + (0.5 * general_score)
-    hybrid_final = hybrid_final + (boost * 0.5)
-    hybrid_final = hybrid_final * (1 - penalty * 0.8)
-    
-    # ====== انتخاب امتیاز نهایی بر اساس دسته‌بندی ======
-    if category == "technical":
-        final_score = technical_final
-    elif category == "administrative":
-        final_score = admin_final
-        # Admin Safety Layer: حداقل ۳۰% برای نمایش
-        final_score = max(final_score, 30)
-        # Admin Cap: حداکثر ۵۵% (برای جلوگیری از dominance)
-        final_score = min(final_score, 55)
-    else:  # hybrid
-        final_score = hybrid_final
-    
-    # ====== اطمینان از محدوده ۰-۱۰۰ ======
-    final_score = int(min(100, max(0, final_score)))
-    
-    # ====== امتیازهای جداگانه برای نمایش ======
+
+    category = detect_job_category(job_title, job_text, tfidf_score, general_score)
+
+    # =========================
+    # 🔧 Normalization
+    # =========================
+
+    norm_embedding = max(0, min(embedding_score / 100, 1))
+    norm_tfidf = max(0, min(tfidf_score / 100, 1))
+    norm_keyword = max(0, min(keyword_score / 100, 1))
+    norm_general = max(0, min(general_score / 100, 1))
+
+    norm_boost = min(boost / 15, 0.8)
+    norm_penalty = min(penalty / 20, 0.8)
+
+    # =========================
+    # 🔀 Semantic Layer (ONLY embedding + keyword)
+    # =========================
+
+    combined_semantic = (
+        0.65 * norm_embedding +
+        0.35 * norm_keyword
+    )
+
+    # =========================
+    # ⚙️ Technical Layer (ONLY TF-IDF / lexical)
+    # =========================
+
+    technical_score = norm_tfidf
+
+    # =========================
+    # ⚖️ Final Weights
+    # =========================
+
+    W_SEMANTIC = 0.50
+    W_TECHNICAL = 0.25
+    W_GENERAL = 0.15
+    W_BOOST = 0.10
+    W_PENALTY = 0.05
+
+    # =========================
+    # 🧮 Final Score
+    # =========================
+
+    final_score = (
+        W_SEMANTIC * combined_semantic +
+        W_TECHNICAL * technical_score +
+        W_GENERAL * norm_general +
+        W_BOOST * norm_boost -
+        W_PENALTY * norm_penalty
+    )
+
+    final_score = int(max(0, min(final_score * 100, 100)))
+
+    # =========================
+    # 📤 Output
+    # =========================
+
     return {
-        'final': final_score,
-        'technical': int(technical_score),
-        'general': int(general_score),
-        'boost': boost,
-        'penalty': penalty_percent,
-        'category': category,
-        'technical_score_raw': int(technical_final),
-        'admin_score_raw': int(admin_final),
-        'hybrid_score_raw': int(hybrid_final)
+        "final": final_score,
+
+        "technical": int(technical_score * 100),
+        "general": int(general_score),
+        "keyword": int(keyword_score),
+
+        "boost": boost,
+        "penalty": penalty_percent,
+        "category": category,
+
+        "weights": {
+            "semantic": W_SEMANTIC,
+            "technical": W_TECHNICAL,
+            "general": W_GENERAL,
+            "boost": W_BOOST,
+            "penalty": W_PENALTY
+        },
+
+        "combined_semantic": combined_semantic,
+        "matched_keywords": matched_keywords,
+        "group_results": group_results
     }
-
-
 warnings.filterwarnings('ignore')
 
 
