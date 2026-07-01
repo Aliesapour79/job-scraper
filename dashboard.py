@@ -111,7 +111,7 @@ section[data-testid="stSidebar"]{
 """, unsafe_allow_html=True)
 
 # =========================
-# 🔐 لاگین ادمین
+# 🔐 لاگین ادمین (کشویی)
 # =========================
 if "admin" not in st.session_state:
     st.session_state.admin = False
@@ -156,26 +156,28 @@ if conn is None:
     st.stop()
 
 # =========================
-# سایدبار - ادمین + دکمه اجرا
+# سایدبار - ادمین کشویی + دکمه اجرا
 # =========================
 with st.sidebar:
     st.markdown("### 🔐 پنل ادمین")
     
     if not st.session_state.admin:
-        password = st.text_input("رمز ورود", type="password")
-        if st.button("ورود"):
-            try:
-                # 🔥 حذف فاصله‌های اضافی و کاراکترهای مخفی
-                clean_password = ''.join(c for c in password.strip() if c.isprintable())
-                clean_secret = ''.join(c for c in st.secrets["admin"]["password"].strip() if c.isprintable())
-                
-                if clean_password == clean_secret:
-                    st.session_state.admin = True
-                    st.rerun()
-                else:
-                    st.error("❌ رمز اشتباه است")
-            except:
-                st.error("❌ رمز در Secrets تنظیم نشده!")
+        # 🔥 کشویی (Expandable)
+        with st.expander("🔑 ورود به پنل ادمین", expanded=False):
+            password = st.text_input("رمز ورود", type="password", key="admin_password")
+            if st.button("ورود", key="admin_login"):
+                try:
+                    # حذف فاصله‌های اضافی و کاراکترهای مخفی
+                    clean_password = ''.join(c for c in password.strip() if c.isprintable())
+                    clean_secret = ''.join(c for c in st.secrets["admin"]["password"].strip() if c.isprintable())
+                    
+                    if clean_password == clean_secret:
+                        st.session_state.admin = True
+                        st.rerun()
+                    else:
+                        st.error("❌ رمز اشتباه است")
+                except:
+                    st.error("❌ رمز در Secrets تنظیم نشده!")
     else:
         st.success("✅ ادمین عزیز خوش آمدی")
         
@@ -432,18 +434,28 @@ with st.container(border=True):
         search_btn = st.button("🔍 جستجو", use_container_width=True)
 
 # =========================
-# نتایج جستجو
+# نتایج جستجو با امتیاز
 # =========================
 if search_btn or search_term or selected_category != 'همه':
-    query = "SELECT title, company, location, url FROM jobvision_jobs WHERE 1=1"
+    query = """
+        SELECT 
+            j.title, 
+            j.company, 
+            j.location, 
+            j.url,
+            s.score
+        FROM jobvision_jobs j
+        LEFT JOIN jobvision_scores s ON j.id = s.job_id
+        WHERE 1=1
+    """
     params = []
 
     if search_term:
-        query += " AND (title LIKE ? OR company LIKE ?)"
+        query += " AND (j.title LIKE ? OR j.company LIKE ?)"
         params.extend([f"%{search_term}%", f"%{search_term}%"])
 
     if selected_category != 'همه':
-        query += " AND job_category = ?"
+        query += " AND j.job_category = ?"
         params.append(selected_category)
 
     query += " LIMIT 50"
@@ -451,24 +463,37 @@ if search_btn or search_term or selected_category != 'همه':
     df_search = pd.read_sql_query(query, conn, params=params)
 
     if not df_search.empty:
-        df_search.columns = ['عنوان', 'شرکت', 'موقعیت', 'لینک']
+        df_search.columns = ['عنوان', 'شرکت', 'موقعیت', 'لینک', 'امتیاز']
+        
+        # نمایش امتیاز با رنگ
+        def style_score(val):
+            if val and val >= 70:
+                return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+            elif val and val >= 50:
+                return 'background-color: #fff3cd; color: #856404;'
+            elif val:
+                return 'background-color: #f8d7da; color: #721c24;'
+            return ''
 
         st.success(f"✅ {len(df_search)} آگهی پیدا شد")
 
         st.dataframe(
-            df_search,
+            df_search.style.map(style_score, subset=['امتیاز']),
             use_container_width=True,
             hide_index=True,
             column_config={
                 'لینک': st.column_config.LinkColumn(
                     'لینک',
                     display_text='🔗 مشاهده'
+                ),
+                'امتیاز': st.column_config.NumberColumn(
+                    'امتیاز',
+                    format='%d%%'
                 )
             }
         )
     else:
         st.warning("هیچ آگهی‌ای پیدا نشد")
-
 # =========================
 # بستن اتصال
 # =========================
