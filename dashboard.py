@@ -165,7 +165,11 @@ with st.sidebar:
         password = st.text_input("رمز ورود", type="password")
         if st.button("ورود"):
             try:
-                if password == st.secrets["admin"]["password"]:
+                # 🔥 حذف فاصله‌های اضافی و کاراکترهای مخفی
+                clean_password = ''.join(c for c in password.strip() if c.isprintable())
+                clean_secret = ''.join(c for c in st.secrets["admin"]["password"].strip() if c.isprintable())
+                
+                if clean_password == clean_secret:
                     st.session_state.admin = True
                     st.rerun()
                 else:
