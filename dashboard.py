@@ -118,7 +118,7 @@ def get_last_update_time():
         # دریافت آخرین زمان scraped_at از جدول jobs
         cursor.execute("""
             SELECT MAX(scraped_at) 
-            FROM jobvision_jobs_clean
+            FROM jobvision_jobs_clean_clean
         """)
         result = cursor.fetchone()[0]
         conn.close()
@@ -249,10 +249,10 @@ st.markdown("---")
 # =========================
 df_stats = pd.read_sql_query("""
     SELECT 
-        (SELECT COUNT(*) FROM jobvision_jobs_clean) as total_jobs,
-        (SELECT COUNT(DISTINCT company) FROM jobvision_jobs_clean) as total_companies,
-        (SELECT COUNT(DISTINCT location) FROM jobvision_jobs_clean) as total_cities,
-        (SELECT COUNT(*) FROM jobvision_jobs_clean WHERE is_urgent = 1) as urgent
+        (SELECT COUNT(*) FROM jobvision_jobs_clean_clean) as total_jobs,
+        (SELECT COUNT(DISTINCT company) FROM jobvision_jobs_clean_clean) as total_companies,
+        (SELECT COUNT(DISTINCT location) FROM jobvision_jobs_clean_clean) as total_cities,
+        (SELECT COUNT(*) FROM jobvision_jobs_clean_clean WHERE is_urgent = 1) as urgent
 """, conn)
 
 c1, c2, c3, c4 = st.columns(4)
@@ -281,7 +281,7 @@ with col1:
 
     df_cat = pd.read_sql_query("""
         SELECT job_category, COUNT(*) as count 
-        FROM jobvision_jobs_clean 
+        FROM jobvision_jobs_clean_clean 
         WHERE job_category != '' 
         GROUP BY job_category 
         ORDER BY count DESC 
@@ -318,7 +318,7 @@ with col2:
 
     df_company = pd.read_sql_query("""
         SELECT company, COUNT(*) as count 
-        FROM jobvision_jobs_clean 
+        FROM jobvision_jobs_clean_clean 
         WHERE company != '' 
         GROUP BY company 
         ORDER BY count DESC 
@@ -368,7 +368,7 @@ df_top = pd.read_sql_query("""
         s.score,
         s.category,
         j.url
-    FROM jobvision_jobs_clean j
+    FROM jobvision_jobs_clean_clean j
     LEFT JOIN jobvision_scores s ON j.id = s.job_id
     WHERE s.score IS NOT NULL
     ORDER BY s.score DESC
@@ -438,7 +438,7 @@ with st.container(border=True):
     with col2:
         df_cat_filter = pd.read_sql_query("""
             SELECT DISTINCT job_category 
-            FROM jobvision_jobs_clean 
+            FROM jobvision_jobs_clean_clean 
             WHERE job_category != '' 
             ORDER BY job_category
         """, conn)
@@ -461,7 +461,7 @@ if search_btn or search_term or selected_category != 'همه':
             j.location, 
             j.url,
             s.score
-        FROM jobvision_jobs_clean j
+        FROM jobvision_jobs_clean_clean j
         LEFT JOIN jobvision_scores s ON j.id = s.job_id
         WHERE 1=1
     """

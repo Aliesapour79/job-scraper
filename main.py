@@ -103,7 +103,7 @@ def save_scores_to_db(results):
     for result in tqdm(results, desc="Saving scores", unit="score"):
         try:
             # پیدا کردن job_id بر اساس URL
-            cursor.execute("SELECT id FROM jobvision_jobs_clean WHERE url = ?", (result.get('url'),))
+            cursor.execute("SELECT id FROM jobvision_jobs_clean_clean WHERE url = ?", (result.get('url'),))
             row = cursor.fetchone()
             
             if row:

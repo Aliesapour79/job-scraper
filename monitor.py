@@ -12,27 +12,27 @@ def get_stats():
     cursor = conn.cursor()
     
     # تعداد کل
-    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs_clean")
+    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs_clean_clean")
     total = cursor.fetchone()[0]
     
     # ۵ دقیقه اخیر
-    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs_clean WHERE scraped_at > datetime('now', '-5 minute')")
+    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs_clean_clean WHERE scraped_at > datetime('now', '-5 minute')")
     last_5min = cursor.fetchone()[0]
     
     # ۱ ساعت اخیر
-    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs_clean WHERE scraped_at > datetime('now', '-1 hour')")
+    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs_clean_clean WHERE scraped_at > datetime('now', '-1 hour')")
     last_hour = cursor.fetchone()[0]
     
     # امروز
-    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs_clean WHERE date(scraped_at) = date('now')")
+    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs_clean_clean WHERE date(scraped_at) = date('now')")
     today = cursor.fetchone()[0]
     
     # تعداد شرکت‌ها
-    cursor.execute("SELECT COUNT(DISTINCT company) FROM jobvision_jobs_clean WHERE company != ''")
+    cursor.execute("SELECT COUNT(DISTINCT company) FROM jobvision_jobs_clean_clean WHERE company != ''")
     companies = cursor.fetchone()[0]
     
     # آخرین آگهی اضافه شده
-    cursor.execute("SELECT title, company, scraped_at FROM jobvision_jobs_clean ORDER BY id DESC LIMIT 1")
+    cursor.execute("SELECT title, company, scraped_at FROM jobvision_jobs_clean_clean ORDER BY id DESC LIMIT 1")
     last_job = cursor.fetchone()
     
     conn.close()

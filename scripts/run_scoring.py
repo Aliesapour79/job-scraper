@@ -39,7 +39,7 @@ def load_jobs(limit=None):
                description, requirements, full_text, skills,
                age_range, gender, job_category, site,
                job_hash, scraped_at
-        FROM jobvision_jobs_clean
+        FROM jobvision_jobs_clean_clean
     """
     if limit:
         query += f" LIMIT {limit}"
