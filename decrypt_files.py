@@ -24,10 +24,9 @@ cipher = Fernet(key.encode())
 # =========================
 files_to_decrypt = [
     "data/jobs_db_clean.db.enc",
-    "cache/jobvision-data-science.json.enc",
-    "cache/jobvision-developer.json.enc",
-    "cache/jobvision-hr.json.enc",
-    "cache/jobvision-secretary.json.enc"
+    "config/settings.py.enc",
+    "config/resume.py.enc",
+    "matcher/skill_groups.py.enc",
 ]
 
 print("=" * 50)
