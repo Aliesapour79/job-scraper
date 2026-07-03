@@ -31,7 +31,7 @@ def init_db():
     # جدول آگهی‌ها با فیلد job_category
     # =========================
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS jobvision_jobs_clean (
+        CREATE TABLE IF NOT EXISTS jobvision_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT,
             company TEXT,
@@ -47,7 +47,8 @@ def init_db():
             gender TEXT,
             job_category TEXT,
             site TEXT DEFAULT 'jobvision',
-            job_hash TEXT UNIQUE
+            job_hash TEXT UNIQUE,
+            scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
 
@@ -66,7 +67,7 @@ def init_db():
             category TEXT,
             outlier_score INTEGER,
             calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (job_id) REFERENCES jobvision_jobs_clean(id)
+            FOREIGN KEY (job_id) REFERENCES jobvision_jobs(id)
         )
     """)
 
@@ -89,10 +90,10 @@ def init_db():
     # =========================
     # ایندکس‌ها
     # =========================
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_clean_url ON jobvision_jobs_clean(url)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_clean_company ON jobvision_jobs_clean(company)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_clean_category ON jobvision_jobs_clean(job_category)")
-    # cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_clean_scraped_at ON jobvision_jobs_clean(scraped_at)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_url ON jobvision_jobs(url)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_company ON jobvision_jobs(company)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_category ON jobvision_jobs(job_category)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_scraped_at ON jobvision_jobs(scraped_at)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_scores_job_id ON jobvision_scores(job_id)")
 
     conn.commit()
@@ -134,7 +135,7 @@ def save_job(job_data):
     skills = job_data.get('skills', [])
 
     cursor.execute("""
-        INSERT OR IGNORE INTO jobvision_jobs_clean (
+        INSERT OR IGNORE INTO jobvision_jobs (
             job_hash, title, company, url, location, salary,
             is_urgent, description, requirements, full_text,
             skills, age_range, gender, job_category, site
@@ -245,7 +246,7 @@ def get_job_by_url(url):
     """دریافت یک آگهی با URL"""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM jobvision_jobs_clean WHERE url = ?", (url,))
+    cursor.execute("SELECT * FROM jobvision_jobs WHERE url = ?", (url,))
     result = cursor.fetchone()
     conn.close()
     return result
@@ -256,7 +257,7 @@ def get_jobs_by_company(company, limit=100):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT * FROM jobvision_jobs_clean 
+        SELECT * FROM jobvision_jobs 
         WHERE company LIKE ? 
         ORDER BY scraped_at DESC LIMIT ?
     """, (f"%{company}%", limit))
@@ -270,7 +271,7 @@ def get_all_jobs(limit=1000):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT * FROM jobvision_jobs_clean 
+        SELECT * FROM jobvision_jobs 
         ORDER BY scraped_at DESC LIMIT ?
     """, (limit,))
     results = cursor.fetchall()
@@ -283,7 +284,7 @@ def get_jobs_by_category(category, limit=1000):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT * FROM jobvision_jobs_clean 
+        SELECT * FROM jobvision_jobs 
         WHERE job_category = ? 
         ORDER BY scraped_at DESC LIMIT ?
     """, (category, limit))
@@ -296,7 +297,7 @@ def get_jobs_count():
     """دریافت تعداد کل آگهی‌ها"""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs_clean")
+    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs")
     count = cursor.fetchone()[0]
     conn.close()
     return count
@@ -307,28 +308,28 @@ def get_stats():
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs_clean")
+    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs")
     total_jobs = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(DISTINCT company) FROM jobvision_jobs_clean")
+    cursor.execute("SELECT COUNT(DISTINCT company) FROM jobvision_jobs")
     total_companies = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(DISTINCT location) FROM jobvision_jobs_clean WHERE location != ''")
+    cursor.execute("SELECT COUNT(DISTINCT location) FROM jobvision_jobs WHERE location != ''")
     total_cities = cursor.fetchone()[0]
 
     cursor.execute("""
-        SELECT COUNT(*) FROM jobvision_jobs_clean 
+        SELECT COUNT(*) FROM jobvision_jobs 
         WHERE scraped_at > datetime('now', '-7 day')
     """)
     last_week = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs_clean WHERE is_urgent = 1")
+    cursor.execute("SELECT COUNT(*) FROM jobvision_jobs WHERE is_urgent = 1")
     urgent = cursor.fetchone()[0]
 
     # آمار بر اساس گروه شغلی
     cursor.execute("""
         SELECT job_category, COUNT(*) 
-        FROM jobvision_jobs_clean 
+        FROM jobvision_jobs 
         WHERE job_category != '' 
         GROUP BY job_category
     """)
@@ -359,7 +360,7 @@ def get_all_existing_urls():
     """
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT url FROM jobvision_jobs_clean")
+    cursor.execute("SELECT url FROM jobvision_jobs")
     # 🔥 نرمال‌سازی URLها قبل از برگرداندن
     urls = {normalize_url(row[0]) for row in cursor.fetchall() if row[0]}
     conn.close()
