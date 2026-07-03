@@ -93,7 +93,7 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_clean_url ON jobvision_jobs_clean(url)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_clean_company ON jobvision_jobs_clean(company)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_clean_category ON jobvision_jobs_clean(job_category)")
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_clean_scraped_at ON jobvision_jobs_clean(scraped_at)")
+    # cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_jobs_clean_scraped_at ON jobvision_jobs_clean(scraped_at)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobvision_scores_job_id ON jobvision_scores(job_id)")
 
     conn.commit()
