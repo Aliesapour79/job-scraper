@@ -15,6 +15,22 @@ local.env
 .streamlit/secrets.toml
 
 # =========================
+# 📁 دیتابیس و کش (بدون رمز)
+# =========================
+cache/*.json
+!cache/*.enc
+partial/
+*.db
+*.sqlite
+*.sqlite3
+
+# 📤 خروجی‌ها
+output/
+*.html
+*.json
+!requirements.json
+
+# =========================
 # 🐍 Python
 # =========================
 __pycache__/
@@ -33,21 +49,6 @@ env/
 ENV/
 env.bak/
 venv.bak/
-
-# =========================
-# 📁 دیتابیس و کش
-# =========================
-# cache/
-partial/
-*.db
-*.sqlite
-*.sqlite3
-
-# 📤 خروجی‌ها
-output/
-*.html
-*.json
-!requirements.json
 
 # =========================
 # 🖥️ IDE
@@ -73,8 +74,15 @@ models/
 *.safetensors
 
 # =========================
-# 🧪 فایل‌های موقت و اضافی
+# 🧪 فایل‌های تست
 # =========================
-encrypt_config_filel.py
-encrypt_files.py
-encrypt_Only_DB_file.py
+scored_jobs_*.csv
+scored_jobs_*.json
+scored_jobs_*.html
+test_*.py
+# فایل‌های تست و موقت
+decrypt_all_file.py
+encrypt_db_clean.py
+scripts/database_cleaner.py
+showdb.py
+data/jobs_db_clean.db

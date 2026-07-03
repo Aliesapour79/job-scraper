@@ -1,4 +1,4 @@
-# jobvision_scraper.py
+# scrapers/jobvision_scraper.py
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -6,6 +6,15 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 import re
 
+from utils.text_processor import (
+    normalize,
+    extract_section,
+    extract_skills_from_requirements,
+    clean_requirements,
+    extract_salary,
+    extract_age,
+    extract_gender
+)
 
 class JobvisionScraper:
     def __init__(self, driver):
@@ -109,11 +118,11 @@ class JobvisionScraper:
         consecutive_failures = 0
         max_consecutive_failures = 5
         MAX_PAGE_RETRY = 3
-        EMPTY_PAGE_LIMIT = 3  # 🔥 جدید: بعد از 3 صفحه خالی متوقف شو
+        EMPTY_PAGE_LIMIT = 3
 
         failed_pages = {}
         seen_urls = set()
-        empty_page_count = 0  # 🔥 جدید: شمارش صفحات خالی پشت سر هم
+        empty_page_count = 0
 
         print("  🔄 Starting resilient multi-page scraping...")
 
@@ -126,12 +135,8 @@ class JobvisionScraper:
                 try:
                     cards = self.extract_job_cards()
 
-                    # =========================
-                    # 🔥 تشخیص: صفحه خالی vs صفحه خراب
-                    # =========================
                     if cards and len(cards) > 0:
-                        # صفحه موفق و دارای آگهی
-                        empty_page_count = 0  # ریست
+                        empty_page_count = 0
                         new_cards = 0
 
                         for card in cards:
@@ -149,14 +154,10 @@ class JobvisionScraper:
                         break
 
                     else:
-                        # صفحه خالی (بدون آگهی)
                         print(f"     ⚠️ Empty page detected (attempt {attempt})")
                         empty_page_count += 1
                         time.sleep(2)
 
-                        # =========================
-                        # 🔥 اگر 3 صفحه خالی پشت سر هم → توقف
-                        # =========================
                         if empty_page_count >= EMPTY_PAGE_LIMIT:
                             print(f"     🛑 {empty_page_count} consecutive empty pages → STOP pagination")
                             print(f"  ✅ Total collected jobs: {len(all_cards)}")
@@ -166,9 +167,6 @@ class JobvisionScraper:
                     print(f"     ❌ Attempt {attempt} failed: {str(e)[:80]}")
                     time.sleep(3)
 
-            # =========================
-            # اگر صفحه شکست خورد (نه خالی)
-            # =========================
             if not page_success:
                 consecutive_failures += 1
 
@@ -183,12 +181,10 @@ class JobvisionScraper:
                     print("     ❌ Too many consecutive failures, stopping scraping")
                     break
 
-            # محدودیت صفحات
             if max_pages and page_num >= max_pages:
                 print(f"     ⏹️ Reached max pages ({max_pages})")
                 break
 
-            # رفتن به صفحه بعد
             try:
                 next_url = self.get_next_page_url()
 
@@ -214,9 +210,6 @@ class JobvisionScraper:
                 time.sleep(5)
                 page_num += 1
 
-        # =========================
-        # Retry صفحات خراب (نسخه ساده و امن)
-        # =========================
         if failed_pages:
             print(f"\n  🔄 Retrying {len(failed_pages)} failed pages...")
 
@@ -257,16 +250,12 @@ class JobvisionScraper:
         return all_cards
 
     # =========================
-    # استخراج جزئیات آگهی (نسخه مقاوم با Exponential Backoff)
+    # استخراج جزئیات آگهی (نسخه نهایی با ETL داخلی)
     # =========================
     def extract_job_detail(self, url, retry=5, base_timeout=20):
         """
         استخراج جزئیات با Timeout افزایشی (Exponential Backoff)
-    
-        Args:
-            url: لینک آگهی
-            retry: تعداد تلاش مجدد
-            base_timeout: Timeout اولیه (ثانیه)
+        + استخراج فیلدها از full_text با استفاده از text_processor
         """
         detail = {
             'title': '',
@@ -276,6 +265,7 @@ class JobvisionScraper:
             'skills': [],
             'age_range': '',
             'gender': '',
+            'salary': '',
             'full_text': '',
             'site': self.site_name,
             'url': url,
@@ -284,14 +274,13 @@ class JobvisionScraper:
 
         for attempt in range(retry + 1):
             try:
-                timeout = base_timeout + (attempt * 25)  # 45, 55, 65, 75, 85, 95
+                timeout = base_timeout + (attempt * 25)
                 self.driver.set_page_load_timeout(timeout)
                 print(f"     ⏳ Loading with {timeout}s timeout (attempt {attempt+1})")
                 
                 try:
                     self.driver.get(url)
                 except Exception as e:
-                    # اگر Timeout بود و تلاش باقی مانده، دوباره تلاش کن
                     if "timeout" in str(e).lower() and attempt < retry:
                         print(f"     ⏳ Timeout with {timeout}s, retrying with more time...")
                         time.sleep(5)
@@ -303,58 +292,52 @@ class JobvisionScraper:
 
                 time.sleep(2)
 
-                # کل متن
+                # =========================
+                # 📄 full_text
+                # =========================
                 body = self.driver.find_element(By.TAG_NAME, 'body')
-                detail['full_text'] = body.text
+                full_text = body.text
+                detail['full_text'] = full_text
 
-                # شرح شغل
-                desc_elements = self.driver.find_elements(By.CSS_SELECTOR, 'div[dir="rtl"]')
-                for elem in desc_elements:
-                    text = elem.text.strip()
-                    if text and len(text) > 50:
-                        detail['description'] = text
-                        break
+                # =========================
+                # 🔥 ETL: استخراج از full_text
+                # =========================
+                text = normalize(full_text)
 
-                # مهارت‌ها
-                skill_tags = self.driver.find_elements(By.CSS_SELECTOR, 'app-tag')
-                skills_text = []
+                # ۱. شرح شغل (description)
+                description_text = extract_section(text, 
+                    ["شرح شغل و وظایف", "Job Description"], 
+                    ["شرایط احراز شغل", "Job Requirements"]
+                )
+                detail['description'] = description_text
 
-                for tag in skill_tags:
-                    try:
-                        title = tag.find_element(By.CSS_SELECTOR, '.tag-title').text.strip()
-                        value = tag.find_element(By.CSS_SELECTOR, '.tag-value').text.strip()
+                # ۲. شرایط احراز (requirements)
+                requirements_text = extract_section(text, 
+                    ["شرایط احراز شغل", "Job Requirements"], 
+                    ["ثبت مشکل و تخلف آگهی", "موقعیت های شغلی مشابه", "ارسال رزومه"]
+                )
+                requirements_text = clean_requirements(requirements_text)
+                detail['requirements'] = requirements_text
 
-                        detail['skills'].append({
-                            'name': title,
-                            'level': value
-                        })
+                # ۳. مهارت‌ها (skills) - استخراج از بخش نرم افزارها
+                skills_text = extract_skills_from_requirements(text)
+                detail['skills'] = skills_text
 
-                        skills_text.append(f"{title} ({value})")
+                # ۴. حقوق (salary)
+                salary = extract_salary(text)
+                detail['salary'] = salary
 
-                    except:
-                        pass
+                # ۵. محدوده سنی (age_range) - از requirements استخراج میشه
+                age_range = extract_age(requirements_text)
+                detail['age_range'] = age_range
 
-                detail['requirements'] = ' | '.join(skills_text)
+                # ۶. جنسیت (gender) - از requirements استخراج میشه
+                gender = extract_gender(requirements_text)
+                detail['gender'] = gender
 
-                # شرایط احراز
-                titles = self.driver.find_elements(By.CSS_SELECTOR, 'div.requirement-title')
-                values = self.driver.find_elements(By.CSS_SELECTOR, 'div.requirement-value')
-
-                for i, title_elem in enumerate(titles):
-                    if i < len(values):
-                        title_text = title_elem.text.strip()
-                        value_text = values[i].text.strip()
-
-                        if 'سن' in title_text:
-                            detail['age_range'] = value_text
-                        elif 'جنسیت' in title_text:
-                            detail['gender'] = value_text
-
-                # اگر به اینجا رسیدیم، موفق بوده
                 return detail
 
             except Exception as e:
-                # اگر خطای Timeout بود و تلاش باقی مانده، ادامه بده
                 if "timeout" in str(e).lower() and attempt < retry:
                     print(f"     ⏳ Timeout, retrying with more time...")
                     time.sleep(3)

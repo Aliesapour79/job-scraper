@@ -94,7 +94,7 @@ def save_scores_to_db(results):
     """ذخیره امتیازها در دیتابیس"""
     print("\n💾 Saving scores to database...")
     
-    conn = sqlite3.connect("data/jobs.db")
+    conn = sqlite3.connect("data/jobs_db_clean.db")
     cursor = conn.cursor()
     
     saved = 0
@@ -103,7 +103,7 @@ def save_scores_to_db(results):
     for result in tqdm(results, desc="Saving scores", unit="score"):
         try:
             # پیدا کردن job_id بر اساس URL
-            cursor.execute("SELECT id FROM jobvision_jobs WHERE url = ?", (result.get('url'),))
+            cursor.execute("SELECT id FROM jobvision_jobs_clean WHERE url = ?", (result.get('url'),))
             row = cursor.fetchone()
             
             if row:
@@ -298,7 +298,7 @@ def main():
             except:
                 pass
 
-        print(f"\n💾 Database: data/jobs.db")
+        print(f"\n💾 Database: data/jobs_db_clean.db")
         print(f"📁 Output: output/")
         print(f"📁 Partial: partial/")
         print("\n" + "=" * 80)
