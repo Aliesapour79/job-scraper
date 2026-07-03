@@ -47,8 +47,7 @@ def init_db():
             gender TEXT,
             job_category TEXT,
             site TEXT DEFAULT 'jobvision',
-            job_hash TEXT UNIQUE,
-            scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            job_hash TEXT UNIQUE
         )
     """)
 
