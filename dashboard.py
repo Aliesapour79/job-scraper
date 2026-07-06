@@ -13,7 +13,7 @@ from utils.decrypt import decrypt_data, decrypt_file_to_string
 # تنظیمات صفحه
 # =========================
 st.set_page_config(
-    page_title="JobVision Dashboard",
+    page_title="MatchFlow Dashboard",
     page_icon="📊",
     layout="wide"
 )
@@ -75,7 +75,6 @@ section[data-testid="stSidebar"]{
     background:#111827;
 }
 
-/* کارت‌های نمایش آگهی */
 .job-card{
     background: linear-gradient(135deg,#1e293b,#0f172a);
     border:1px solid #334155;
@@ -91,7 +90,6 @@ section[data-testid="stSidebar"]{
     transform: translateX(6px);
 }
 
-/* اسکرول بار */
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -109,40 +107,33 @@ section[data-testid="stSidebar"]{
 }
 </style>
 """, unsafe_allow_html=True)
+
+
 def get_last_update_time():
     """دریافت آخرین زمان بروزرسانی دیتابیس"""
     try:
         conn = sqlite3.connect("data/jobs_db_clean.db")
         cursor = conn.cursor()
-        
-        # دریافت آخرین زمان scraped_at از جدول jobs
         cursor.execute("""
             SELECT MAX(scraped_at) 
-            FROM jobvision_jobs_clean_clean
+            FROM jobvision_jobs_clean
         """)
         result = cursor.fetchone()[0]
         conn.close()
-        
         if result:
             return datetime.strptime(result, '%Y-%m-%d %H:%M:%S')
         else:
             return datetime.now()
     except:
         return datetime.now()
+
+
 # =========================
-# 🔐 لاگین ادمین (کشویی)
+# 🔐 لاگین ادمین
 # =========================
 if "admin" not in st.session_state:
     st.session_state.admin = False
 
-# =========================
-# رمزگشایی
-# =========================
-skill_enc = "matcher/skill_groups.py.enc"
-if os.path.exists(skill_enc):
-    skill_content = decrypt_file_to_string(skill_enc)
-    if skill_content:
-        exec(skill_content, globals())
 
 # =========================
 # بارگذاری دیتابیس
@@ -170,23 +161,23 @@ def load_db():
         st.error(f"❌ خطا در رمزگشایی: {e}")
         return None
 
+
 conn = load_db()
 if conn is None:
     st.stop()
 
+
 # =========================
-# سایدبار - ادمین کشویی + دکمه اجرا
+# سایدبار
 # =========================
 with st.sidebar:
     st.markdown("### 🔐 پنل ادمین")
     
     if not st.session_state.admin:
-        # 🔥 کشویی (Expandable)
         with st.expander("🔑 ورود به پنل ادمین", expanded=False):
             password = st.text_input("رمز ورود", type="password", key="admin_password")
             if st.button("ورود", key="admin_login"):
                 try:
-                    # حذف فاصله‌های اضافی و کاراکترهای مخفی
                     clean_password = ''.join(c for c in password.strip() if c.isprintable())
                     clean_secret = ''.join(c for c in st.secrets["admin"]["password"].strip() if c.isprintable())
                     
@@ -200,7 +191,6 @@ with st.sidebar:
     else:
         st.success("✅ ادمین عزیز خوش آمدی")
         
-        # دکمه اجرا
         if st.button("🚀 اجرای اسکرپ جدید", use_container_width=True):
             with st.spinner("⏳ در حال ارسال درخواست به گیت‌هاب..."):
                 try:
@@ -226,11 +216,12 @@ with st.sidebar:
     
     st.markdown("---")
 
+
 # =========================
 # هدر
 # =========================
 st.markdown("""
-# 🚀 JobVision Dashboard
+# 🚀 MatchFlow Dashboard
 ### تحلیل هوشمند بازار کار ایران
 """)
 
@@ -244,15 +235,16 @@ with col2:
 
 st.markdown("---")
 
+
 # =========================
 # آمار کلی
 # =========================
 df_stats = pd.read_sql_query("""
     SELECT 
-        (SELECT COUNT(*) FROM jobvision_jobs_clean_clean) as total_jobs,
-        (SELECT COUNT(DISTINCT company) FROM jobvision_jobs_clean_clean) as total_companies,
-        (SELECT COUNT(DISTINCT location) FROM jobvision_jobs_clean_clean) as total_cities,
-        (SELECT COUNT(*) FROM jobvision_jobs_clean_clean WHERE is_urgent = 1) as urgent
+        (SELECT COUNT(*) FROM jobvision_jobs_clean) as total_jobs,
+        (SELECT COUNT(DISTINCT company) FROM jobvision_jobs_clean) as total_companies,
+        (SELECT COUNT(DISTINCT location) FROM jobvision_jobs_clean) as total_cities,
+        (SELECT COUNT(*) FROM jobvision_jobs_clean WHERE is_urgent = 1) as urgent
 """, conn)
 
 c1, c2, c3, c4 = st.columns(4)
@@ -271,6 +263,7 @@ with c4:
 
 st.markdown("---")
 
+
 # =========================
 # نمودارها
 # =========================
@@ -281,7 +274,7 @@ with col1:
 
     df_cat = pd.read_sql_query("""
         SELECT job_category, COUNT(*) as count 
-        FROM jobvision_jobs_clean_clean 
+        FROM jobvision_jobs_clean 
         WHERE job_category != '' 
         GROUP BY job_category 
         ORDER BY count DESC 
@@ -318,7 +311,7 @@ with col2:
 
     df_company = pd.read_sql_query("""
         SELECT company, COUNT(*) as count 
-        FROM jobvision_jobs_clean_clean 
+        FROM jobvision_jobs_clean 
         WHERE company != '' 
         GROUP BY company 
         ORDER BY count DESC 
@@ -355,6 +348,7 @@ with col2:
 
 st.markdown("---")
 
+
 # =========================
 # بهترین تطابق‌ها
 # =========================
@@ -368,7 +362,7 @@ df_top = pd.read_sql_query("""
         s.score,
         s.category,
         j.url
-    FROM jobvision_jobs_clean_clean j
+    FROM jobvision_jobs_clean j
     LEFT JOIN jobvision_scores s ON j.id = s.job_id
     WHERE s.score IS NOT NULL
     ORDER BY s.score DESC
@@ -377,7 +371,6 @@ df_top = pd.read_sql_query("""
 
 if not df_top.empty:
     for _, row in df_top.iterrows():
-        # تعیین رنگ نوار پیشرفت بر اساس امتیاز
         score = int(row['score'])
         if score >= 70:
             color = "#22c55e"
@@ -406,7 +399,7 @@ if not df_top.empty:
             </div>
             <div style="display:flex; justify-content:space-between; flex-wrap:wrap; margin-top:8px;">
                 <span style="color:#94a3b8; font-size:13px;">
-                    🎯 فنی: {row['technical_score']}%  •  📋 عمومی: {row['general_score']}%
+                    🏷️ {row['category']}
                 </span>
                 <a href="{row['url']}" target="_blank" style="color:#60a5fa; text-decoration:none; font-size:13px;">
                     🔗 مشاهده آگهی →
@@ -416,9 +409,10 @@ if not df_top.empty:
         """, unsafe_allow_html=True)
 
 else:
-    st.info("هنوز امتیازی ثبت نشده است. ابتدا `main.py` را با `ENABLE_PROCESSING=True` اجرا کنید.")
+    st.info("هنوز امتیازی ثبت نشده است. ابتدا `main.py` را اجرا کنید.")
 
 st.markdown("---")
+
 
 # =========================
 # جستجو
@@ -438,7 +432,7 @@ with st.container(border=True):
     with col2:
         df_cat_filter = pd.read_sql_query("""
             SELECT DISTINCT job_category 
-            FROM jobvision_jobs_clean_clean 
+            FROM jobvision_jobs_clean 
             WHERE job_category != '' 
             ORDER BY job_category
         """, conn)
@@ -450,9 +444,6 @@ with st.container(border=True):
         st.markdown("<br>", unsafe_allow_html=True)
         search_btn = st.button("🔍 جستجو", use_container_width=True)
 
-# =========================
-# نتایج جستجو با امتیاز
-# =========================
 if search_btn or search_term or selected_category != 'همه':
     query = """
         SELECT 
@@ -461,7 +452,7 @@ if search_btn or search_term or selected_category != 'همه':
             j.location, 
             j.url,
             s.score
-        FROM jobvision_jobs_clean_clean j
+        FROM jobvision_jobs_clean j
         LEFT JOIN jobvision_scores s ON j.id = s.job_id
         WHERE 1=1
     """
@@ -482,7 +473,6 @@ if search_btn or search_term or selected_category != 'همه':
     if not df_search.empty:
         df_search.columns = ['عنوان', 'شرکت', 'موقعیت', 'لینک', 'امتیاز']
         
-        # نمایش امتیاز با رنگ
         def style_score(val):
             if val and val >= 70:
                 return 'background-color: #d4edda; color: #155724; font-weight: bold;'
@@ -511,10 +501,13 @@ if search_btn or search_term or selected_category != 'همه':
         )
     else:
         st.warning("هیچ آگهی‌ای پیدا نشد")
+
+
 # =========================
 # بستن اتصال
 # =========================
 conn.close()
+
 
 # =========================
 # فوتر
@@ -524,7 +517,7 @@ st.markdown("---")
 st.markdown("""
 <div style='text-align:center;color:#94a3b8;padding:20px 0;'>
 
-**JobVision Analytics** — تحلیل هوشمند بازار کار ایران
+**MatchFlow Pipeline** — تحلیل هوشمند بازار کار ایران
 
 Built with ❤️ using Streamlit & Plotly
 
