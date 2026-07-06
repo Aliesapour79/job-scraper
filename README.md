@@ -12,7 +12,7 @@ Unlike a simple scraper, this system is a **full data pipeline + recommendation 
 
 ## 🌐 Live Demo
 👉 **Streamlit Dashboard:**
-[https://jobvision-analyzer.streamlit.app/](https://jobvision-analyzer.streamlit.app/)
+[https://matchflow.streamlit.app/](https://matchflow.streamlit.app/)
 
 ---
 
