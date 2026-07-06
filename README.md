@@ -1,21 +1,12 @@
+## 📘 MatchFlow Pipeline
+
 ---
 
-## 📘 AI Job Intelligence System (Reverse ATS v7)
----
 ## 🧠 Overview
 
-**AI Job Intelligence System** is a multi-source job analysis and ranking engine that scrapes job listings, processes them using NLP techniques, and ranks them based on semantic relevance to a target resume.
+**MatchFlow Pipeline** is a job intelligence and ranking system that scrapes job listings, processes them using NLP techniques, and ranks them based on semantic relevance to a target resume with **level-based skill matching**.
 
 Unlike a simple scraper, this system is a **full data pipeline + recommendation engine + observability layer**.
-
-It is designed to:
-
-* Collect job listings from multiple platforms
-* Deduplicate and persist structured data
-* Analyze job relevance using NLP (embedding + keyword scoring)
-* Rank jobs using a hybrid scoring engine
-* Provide real-time monitoring and analytical dashboards
-* Generate structured reports for decision-making
 
 ---
 
@@ -27,68 +18,108 @@ It is designed to:
 
 ## 🚀 System Evolution
 
-This system evolved through multiple architectural stages:
-
-| Version | Description                                            |
-| ------- | ------------------------------------------------------ |
-| v1      | Simple scraping script                                 |
-| v2      | Basic NLP matching (TF-IDF)                            |
-| v3      | Multi-site scraping pipeline                           |
-| v4      | Hybrid scoring (embedding + keyword)                   |
-| v5      | SQLite persistence + deduplication                     |
-| v6      | Advanced scoring engine (v63 logic)                    |
-| v7      | Observability + caching + dashboard + partial recovery |
+| Version | Description |
+|---------|-------------|
+| v1 | Simple scraping script |
+| v2 | Basic NLP matching (TF-IDF) |
+| v3 | Multi-site scraping pipeline |
+| v4 | Hybrid scoring (embedding + keyword) |
+| v5 | SQLite persistence + deduplication |
+| v6 | Advanced scoring engine |
+| v7 | Observability + caching + dashboard |
+| **v8** | **Level-based matching + dynamic weights + unified database** |
 
 ---
 
 ## 🏗️ System Architecture
 
-```text
-                ┌──────────────────────┐
-                │   Job Sources        │
-                │ (Jobvision, etc.)    │
-                └─────────┬────────────┘
-                          │
-                ┌─────────▼────────────┐
-                │   Scraping Layer     │
-                │ (Selenium Crawlers)  │
-                └─────────┬────────────┘
-                          │
-                ┌─────────▼────────────┐
-                │   Cache Layer        │
-                │ (Fast dedup lookup)  │
-                └─────────┬────────────┘
-                          │
-                ┌─────────▼────────────┐
-                │  Database Layer      │
-                │   (SQLite)           │
-                └─────────┬────────────┘
-                          │
-                ┌─────────▼────────────┐
-                │ NLP Feature Engine   │
-                │ - Embeddings         │
-                │ - TF-IDF             │
-                │ - Keyword scoring    │
-                └─────────┬────────────┘
-                          │
-                ┌─────────▼────────────┐
-                │ Scoring Engine v63   │
-                │ Hybrid ranking model │
-                └─────────┬────────────┘
-                          │
-        ┌─────────────────▼──────────────────┐
-        │ Outlier Detection + Normalization │
-        └─────────────────┬──────────────────┘
-                          │
-        ┌─────────────────▼──────────────────┐
-        │ Output Layer                      │
-        │ JSON + HTML Reports              │
-        └─────────────────┬──────────────────┘
-                          │
-        ┌─────────────────▼──────────────────┐
-        │ Observability Layer              │
-        │ Monitor + Dashboard              │
-        └───────────────────────────────────┘
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      MATCHFLOW PIPELINE                         │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        🕷️ SCRAPING LAYER                        │
+│  ────────────────────────────────────────────────────────────── │
+│  • Jobvision scraper with location & is_urgent extraction      │
+│  • Selenium-based crawling with retry handling                 │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         🧹 ETL LAYER                           │
+│  ────────────────────────────────────────────────────────────── │
+│  • Extract skills from JSON (source database)                  │
+│  • Normalize skills to "Skill (Level)" format                  │
+│  • Clean requirements and extract metadata                     │
+│  • Store in unified database schema                            │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         💾 DATA LAYER                          │
+│  ────────────────────────────────────────────────────────────── │
+│  • SQLite with unified schema (17 columns)                     │
+│  • Columns: id, title, company, url, location, is_urgent,     │
+│    salary, description, requirements, skills, age_range,       │
+│    gender, job_category, site, job_hash, scraped_at, full_text│
+│  • Foreign key relationship with scores table                  │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        🧠 MATCHER LAYER                        │
+│  ────────────────────────────────────────────────────────────── │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ HARD SCORE (Level-Based)                               │    │
+│  │ • Skill matching with levels (Beginner/Intermediate/Advanced) │
+│  │ • Dynamic skill groups with weighted keywords          │    │
+│  │ • Ratio-based scoring: resume_level / job_level        │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ FUNCTIONAL SCORE                                       │    │
+│  │ • Extracted from job description                       │    │
+│  │ • Matches functional verbs (design, develop, etc.)     │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ SOFT SCORE                                             │    │
+│  │ • Extracted from job description                       │    │
+│  │ • Matches soft skills (teamwork, communication, etc.)  │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ SEMANTIC SCORE                                         │    │
+│  │ • Sentence Transformers (MiniLM)                       │    │
+│  │ • Resume-to-job semantic similarity                    │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │ ELIGIBILITY (Penalty System)                           │    │
+│  │ • Age range validation                                 │    │
+│  │ • Gender requirements                                  │    │
+│  │ • Military service status                              │    │
+│  │ • Education level matching                             │    │
+│  └─────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        📊 OUTPUT LAYER                         │
+│  ────────────────────────────────────────────────────────────── │
+│  • JSON report with full details                              │
+│  • HTML report with visual cards                              │
+│  • Score storage in database                                  │
+│  • Top 30 jobs to Telegram (optional)                         │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        📡 OBSERVABILITY LAYER                  │
+│  ────────────────────────────────────────────────────────────── │
+│  • Streamlit Dashboard with real-time analytics                │
+│  • Score attribution analysis                                  │
+│  • Category distribution charts                                │
+│  • Job search interface                                        │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -97,211 +128,193 @@ This system evolved through multiple architectural stages:
 
 ### 🔄 Multi-Source Scraping
 
-* Jobvision (multiple categories)
-* Extensible scraper architecture
-* Selenium-based crawling with retry handling
+- Jobvision with multiple categories (developer, data-science, secretary, hr)
+- Selenium-based crawling with retry handling
+- **location** and **is_urgent** extraction
+- Cache system for fast duplicate detection
 
 ---
 
-### 🧠 NLP Matching Engine
+### 🧠 Level-Based Skill Matching (v8)
 
-* Sentence Transformers (MiniLM)
-* TF-IDF similarity scoring
-* Keyword-based skill extraction
-* Resume-to-job semantic matching
+**Hard Score** is now computed using **skill levels**:
 
----
+```
+Level Weights:
+- Beginner   → 1.0
+- Intermediate → 2.0
+- Advanced   → 3.0
 
-### 🎯 Scoring System (Hybrid Model)
-
-Final score is computed using:
-
-* Embedding similarity score
-* TF-IDF similarity score
-* Keyword match score
-* Category weighting (technical vs general)
-* Boost / penalty system
-* Outlier adjustment
-
----
-
-### 📊 Job Classification
-
-Jobs are automatically categorized into:
-
-* 🔧 Technical (Software, AI, Data, DevOps)
-* 🧾 General (Office, Admin, HR, Communication)
-* 🔀 Hybrid (Mixed skill requirements)
-
----
-
-### 🗄️ Data Persistence Layer
-
-* SQLite database storage
-* Duplicate detection (URL-based + hash-based)
-* Structured job normalization
-* Historical tracking of jobs
-
----
-
-### ⚡ Cache System
-
-* Local caching of scraped job lists
-* Fast duplicate detection before DB query
-* Reduces scraping overhead significantly
-
----
-
-### 📡 Observability Layer
-
-* `monitor.py` → real-time database inspection
-* `dashboard.py` → analytical visualization interface
-* `tqdm` progress tracking for long-running jobs
-* partial JSON saves for crash recovery
-
----
-
-## 📊 Outputs
-
-### 📦 JSON Output
-
-Includes:
-
-* Final score
-* Technical score
-* General score
-* Embedding score
-* TF-IDF score
-* Matched skills
-* Category classification
-* Outlier score
-
----
-
-### 🌐 HTML Report
-
-* Ranked job list
-* Category breakdown
-* Skill highlights
-* Top-K recommendations
-* Clean dashboard-style UI
-
----
-
-## 🔄 Data Lifecycle
-
-1. Scrape job listings from multiple sources
-2. Cache raw job batches
-3. Deduplicate against database
-4. Store normalized jobs in SQLite
-5. Extract NLP features
-6. Compute hybrid relevance score
-7. Rank and classify jobs
-8. Generate structured reports
-9. Monitor system state in real-time
-
----
-
-## 🧮 Scoring Formula (Conceptual)
-
-```text
-Final Score =
-(Embedding Similarity × W1) +
-(TF-IDF Similarity × W2) +
-(Keyword Score × W3) +
-(Category Weight) +
-(Boost - Penalty)
+Match Score = min(resume_level / job_level, 1.0)
 ```
 
-Weights are dynamically adjustable depending on configuration.
+**Example:**
+| Resume Level | Job Level | Score |
+|--------------|-----------|-------|
+| Advanced (3) | Advanced (3) | 100% |
+| Advanced (3) | Intermediate (2) | 100% |
+| Intermediate (2) | Advanced (3) | 66.7% |
+
+---
+
+### 🎯 Dynamic Weights
+
+Weights are automatically adjusted based on job category:
+
+| Category | Hard | Functional | Soft | Semantic |
+|----------|------|------------|------|----------|
+| **Technical** | 0.50 | 0.20 | 0.10 | 0.20 |
+| **Administrative** | 0.15 | 0.25 | 0.40 | 0.20 |
+| **Hybrid** | 0.35 | 0.25 | 0.25 | 0.15 |
+
+---
+
+### 🗄️ Unified Database Schema
+
+**17 columns** with proper relationships:
+
+- `location`, `is_urgent` fields added
+- Skills stored as `"Skill (Level)"` format
+- Foreign key to scores table
+- Indexed for performance
+
+---
+
+### 📊 Scoring Formula (v8)
+
+```
+Hard Score = Σ(skill_match_score × weight) × normalization
+Functional Score = Σ(functional_verb_matches)
+Soft Score = Σ(soft_keyword_matches)
+Semantic Score = embedding_similarity × 100
+
+Raw Score = (Hard × W_hard) + (Functional × W_func) + (Soft × W_soft) + (Semantic × W_semantic)
+
+Final Score = Raw Score × (1 - Penalty/100)
+```
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Layer      | Technology                            |
-| ---------- | ------------------------------------- |
-| Language   | Python 3.11                           |
-| Scraping   | Selenium                              |
-| NLP        | sentence-transformers                 |
-| ML/Stats   | scikit-learn, numpy                   |
-| Storage    | SQLite                                |
-| UI         | HTML + Dashboard (Streamlit / custom) |
-| Monitoring | Custom monitor module                 |
-| Pipeline   | Modular Python architecture           |
+| Layer | Technology |
+|-------|------------|
+| Language | Python 3.11+ |
+| Scraping | Selenium |
+| NLP | sentence-transformers (MiniLM) |
+| ML/Stats | scikit-learn, numpy, scipy |
+| Storage | SQLite |
+| Dashboard | Streamlit + Plotly |
+| Visualization | HTML + CSS |
+| CI/CD | GitHub Actions |
 
 ---
 
 ## 📁 Project Structure
 
-```text
-job-scraper/
-│
-├── core/                 # Pipeline engine
-├── matcher/             # NLP + scoring logic
-├── scrapers/            # Web scraping layer
-├── utils/               # Helpers, DB, drivers
+```
+matchflow-pipeline/
 ├── config/              # Settings + resume
+├── core/                # Pipeline engine (scorer, reporter)
+├── matcher/             # Matching engine
+│   ├── eligibility.py   # Penalty system
+│   ├── explainability.py # Score explanations
+│   ├── score_calculator.py # v8 scoring
+│   ├── skill_parser.py  # Level-based parsing
+│   ├── skill_groups.py  # Skill categories
+│   └── weights.py       # Dynamic weights
+├── scrapers/            # Web scraping
+├── utils/               # Helpers, DB, drivers
+├── report/              # HTML generator
+├── analysis/            # Score attribution analysis
+├── scripts/             # ETL and scoring scripts
+├── data/                # SQLite database
 ├── cache/               # Cache layer
-├── data/                # SQLite DB
 ├── output/              # Reports (JSON/HTML)
-├── partial/             # Crash recovery data
-├── report/              # Report generator
+├── tmp/                 # Test files (ignored)
 │
-├── dashboard.py         # UI dashboard
-├── monitor.py           # Live DB viewer
 ├── main.py              # Entry point
-└── README.md
+├── dashboard.py         # Streamlit dashboard
+├── README.md
+└── requirements.txt
 ```
 
 ---
 
 ## 🚀 Getting Started
 
-### 1. Install dependencies
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/Aliesapour79/job-scraper.git
+cd job-scraper
+```
+
+### 2. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Run system
+
+### 3. Run the system
 
 ```bash
 python main.py
 ```
 
-### 3. Optional components
-
-* Live monitoring:
+### 4. Optional components
 
 ```bash
-python monitor.py
-```
+# Dashboard
+streamlit run dashboard.py
 
-* Dashboard:
+# Score attribution analysis
+python analysis/run_final_score_attribution.py
 
-```bash
-python dashboard.py
+# Database ETL
+python scripts/database_cleaner.py
 ```
 
 ---
 
 ## 📈 Performance Notes
 
-* ~3000+ jobs processed per run
-* ~4–7 jobs/sec scoring speed
-* Multi-stage caching reduces redundant scraping
-* DB-based dedup prevents reprocessing
+- **Jobs processed:** 3,587 jobs per run
+- **Scoring speed:** ~5-6 jobs/second
+- **Best match score:** 82.01%
+- **Technical jobs avg:** 32.77%
+- **Administrative jobs avg:** 15.50%
+
+---
+
+## 📊 Outputs
+
+### 📦 JSON Report
+- Full job details with scores
+- Matched skills list
+- Category classification
+- Penalty reasons
+
+### 🌐 HTML Report
+- Visual job cards
+- Score breakdown
+- Category filtering
+- Top matches highlighted
+
+### 📈 Dashboard
+- Real-time analytics
+- Category distribution charts
+- Top companies ranking
+- Job search interface
 
 ---
 
 ## 📌 Current System State
 
-This system is no longer a simple scraper.
+This system is a:
 
-It is a:
-
-> **Job Intelligence & Ranking Pipeline with Observability and Persistence Layer**
+> **Complete Job Intelligence & Ranking Pipeline with Level-Based Matching, Dynamic Weights, and Unified Database**
 
 ---
 
@@ -309,7 +322,6 @@ It is a:
 
 **Ali Eisapour Sharabiani**
 
-Software Engineer
-Python | AI | Data Systems | Embedded Systems
+Software Engineer | Python Developer | AI/Computer Vision | IoT & Embedded Systems
 
 ---
