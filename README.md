@@ -61,9 +61,7 @@ Unlike a simple scraper, this system is a **full data pipeline + recommendation 
 │                         💾 DATA LAYER                          │
 │  ────────────────────────────────────────────────────────────── │
 │  • SQLite with unified schema (17 columns)                     │
-│  • Columns: id, title, company, url, location, is_urgent,     │
-│    salary, description, requirements, skills, age_range,       │
-│    gender, job_category, site, job_hash, scraped_at, full_text│
+│
 │  • Foreign key relationship with scores table                  │
 └─────────────────────────────────────────────────────────────────┘
                                 │
@@ -283,8 +281,6 @@ python scripts/database_cleaner.py
 - **Jobs processed:** 3,587 jobs per run
 - **Scoring speed:** ~5-6 jobs/second
 - **Best match score:** 82.01%
-- **Technical jobs avg:** 32.77%
-- **Administrative jobs avg:** 15.50%
 
 ---
 
