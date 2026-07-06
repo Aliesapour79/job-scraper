@@ -31,6 +31,24 @@ output/
 !requirements.json
 
 # =========================
+# 🧪 فایل‌های تست و دیباگ (همه توی tmp)
+# =========================
+tmp/
+scored_jobs_*.csv
+scored_jobs_*.json
+scored_jobs_*.html
+test_*.py
+debug_*.py
+check_*.py
+showdb.py
+monitor.py
+power_shell_code.ps1
+project_structure.txt
+decrypt_*.py
+encrypt_*.py
+organize_files.py
+
+# =========================
 # 🐍 Python
 # =========================
 __pycache__/
@@ -74,15 +92,7 @@ models/
 *.safetensors
 
 # =========================
-# 🧪 فایل‌های تست
+# 📁 موقت (فقط لوکال)
 # =========================
-scored_jobs_*.csv
-scored_jobs_*.json
-scored_jobs_*.html
-test_*.py
-# فایل‌های تست و موقت
-decrypt_all_file.py
-encrypt_db_clean.py
 scripts/database_cleaner.py
-showdb.py
 data/jobs_db_clean.db

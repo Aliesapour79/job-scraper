@@ -1,402 +1,213 @@
 # matcher/score_calculator.py
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import time
-import json
-from datetime import datetime
-import platform
 import re
-from collections import defaultdict
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 import warnings
-from webdriver_manager.chrome import ChromeDriverManager
-from utils import setup_driver
-# ==========================================
-# ایمپورت‌های جدید از ساختار ماژولار
-# ==========================================
-from config import RESUME_TEXT
-from config.settings import GENERIC_KEYWORDS, TECH_KEYWORDS_MAP, ADMIN_KEYWORDS_WEIGHTED
-from .skill_groups import SKILL_GROUPS, JOB_TITLE_WEIGHT_MAP
+from .weights import get_weights
+from .eligibility import check_eligibility
+from .skill_groups import SKILL_GROUPS
+from .text_normalizer import TextNormalizer
+from .skill_parser import parse_skills_with_level, calculate_skill_match_score
 
-def generic_penalty(job_text):
-    """
-    محاسبه جریمه برای آگهی‌های عمومی
-    هر کلمه عمومی ۵٪ جریمه، حداکثر ۲۰٪
-    """
-    job_text_lower = job_text.lower()
-    count = sum(1 for w in GENERIC_KEYWORDS if w.lower() in job_text_lower)
-    penalty = min(0.20, count * 0.05)
-    return penalty
-
-def calculate_general_score(job_text, job_title=""):
-    """
-    محاسبه امتیاز عمومی با وزن‌دهی به کلمات
-    Context-aware: اگر عنوان شامل کلمات اداری باشه، ضریب میخوره
-    """
-    from config import ADMIN_KEYWORDS_WEIGHTED
-    
-    job_text_lower = job_text.lower()
-    total_score = 0
-    
-    for keyword, weight in ADMIN_KEYWORDS_WEIGHTED.items():
-        keyword_lower = keyword.lower()
-        if keyword_lower in job_text_lower:
-            total_score += weight
-        # partial match برای کلمات ترکیبی
-        elif len(keyword_lower) > 3:
-            parts = keyword_lower.split()
-            if any(part in job_text_lower for part in parts):
-                total_score += weight * 0.5
-    
-    # نرمال‌سازی: حداکثر ۱۰۰
-    general_score = min(100, total_score * 5)
-    
-    # ====== Context-Aware: تقویت General برای آگهی‌های اداری ======
-    job_title_lower = job_title.lower()
-    if "منشی" in job_title_lower or "اداری" in job_title_lower:
-        general_score = min(100, general_score * 1.2)
-    
-    return int(general_score)
-
-def domain_boost(job_text, resume_text, semantic_matcher=None):
-    """
-    محاسبه پاداش با استفاده از semantic similarity
-    اگر semantic_matcher در دسترس باشه، از embedding استفاده میکنه
-    در غیر این صورت از rule-based استفاده میکنه
-    """
-    from config import TECH_KEYWORDS_MAP
-    
-    # ====== روش Semantic (با embedding) ======
-    if semantic_matcher:
-        try:
-            job_emb = semantic_matcher.encode_texts([job_text])[0]
-            resume_emb = semantic_matcher.encode_texts([resume_text])[0]
-            
-            from sklearn.metrics.pairwise import cosine_similarity
-            sim = cosine_similarity([job_emb], [resume_emb])[0][0]
-            
-            if sim > 0.5:
-                return 15
-            elif sim > 0.4:
-                return 10
-            elif sim > 0.3:
-                return 8
-            elif sim > 0.25:
-                return 5
-            else:
-                return 0
-        except:
-            pass
-    
-    # ====== روش Rule-Based (fallback) ======
-    job_text_lower = job_text.lower()
-    resume_text_lower = resume_text.lower()
-    
-    matches = 0
-    for category, keywords in TECH_KEYWORDS_MAP.items():
-        for keyword in keywords:
-            keyword_lower = keyword.lower()
-            if keyword_lower in job_text_lower and keyword_lower in resume_text_lower:
-                matches += 1
-                break
-            elif len(keyword_lower) > 3:
-                parts = keyword_lower.split()
-                if any(part in job_text_lower for part in parts) and \
-                   any(part in resume_text_lower for part in parts):
-                    matches += 0.5
-                    break
-    
-    boost = min(15, int(matches * 4))
-    return boost
-
-def min_max_normalize(scores):
-    if not scores:
-        return scores
-    
-    min_val = min(scores)
-    max_val = max(scores)
-    
-    if max_val == min_val:
-        return [0.5] * len(scores)
-    
-    return [(x - min_val) / (max_val - min_val) for x in scores]
-
-# ==========================================
-# 🔥 v7: Dual Track + Hybrid Scoring
-# ==========================================
-
-def detect_job_category(job_title, job_text, technical_score, general_score):
-    """
-    تشخیص دسته‌بندی شغل:
-    - technical: مشاغل فنی و تخصصی
-    - administrative: مشاغل اداری (Core)
-    - hybrid: مشاغل ترکیبی (مثل پشتیبانی فنی)
-    """
-    job_title_lower = job_title.lower()
-    job_text_lower = job_text.lower()
-    
-    # ====== تشخیص Core Admin Jobs ======
-    admin_keywords = ["منشی", "پذیرش", "کارمند اداری", "امور اداری", "دبیرخانه"]
-    for kw in admin_keywords:
-        if kw in job_title_lower:
-            return "administrative"
-    
-    # ====== تشخیص Hybrid Jobs (پشتیبانی فنی) ======
-    hybrid_keywords = ["پشتیبانی فنی", "پشتیبانی", "support", "helpdesk"]
-    for kw in hybrid_keywords:
-        if kw in job_title_lower or kw in job_text_lower:
-            return "hybrid"
-    
-    # ====== تشخیص Technical Jobs ======
-    # اگر technical_score > general_score + 10 → فنی
-    if technical_score > general_score + 10:
-        return "technical"
-    
-    # ====== تشخیص Administrative ======
-    if general_score > technical_score + 10:
-        return "administrative"
-    
-    # ====== بقیه موارد: Hybrid (تعادل بین دو) ======
-    if abs(technical_score - general_score) <= 10:
-        return "hybrid"
-    
-    return "technical"  # پیش‌فرض
-
-# def calculate_final_score_v63(idx, job_text, resume_text, embedding_score, tfidf_score, 
-#                               all_embedding_scores, all_tfidf_scores, semantic_matcher=None, job_title=""):
-#     """
-#     محاسبه امتیاز نهایی با سیستم Dual Track + Hybrid
-#     نسخه v7:
-#     1. Technical Track: برای مشاغل فنی
-#     2. Admin Track: برای مشاغل اداری با حداقل ۳۰% نمایش
-#     3. Hybrid: برای مشاغل ترکیبی (پشتیبانی فنی)
-#     """
-#     from config import SCORE_WEIGHTS, INTENT_WEIGHTS
-    
-#     # ====== Scale-Aware Normalization ======
-#     norm_embedding = embedding_score / 100.0
-#     norm_tfidf = min(tfidf_score / 20.0, 1.0)
-    
-#     # ====== Technical Score ======
-#     technical_score = (norm_embedding * 0.7 + norm_tfidf * 0.3) * 100
-    
-#     # ====== General Score ======
-#     general_score = calculate_general_score(job_text, job_title)
-    
-#     # ====== Boost ======
-#     boost = domain_boost(job_text, resume_text, semantic_matcher)
-    
-#     # ====== Penalty ======
-#     penalty = generic_penalty(job_text)
-#     penalty_percent = int(penalty * 100)
-    
-#     # ====== تشخیص دسته‌بندی شغل ======
-#     category = detect_job_category(job_title, job_text, technical_score, general_score)
-    
-#     # ====== محاسبه امتیاز بر اساس دسته‌بندی ======
-    
-#     # Technical Track: امتیاز فنی با تأثیر کم General
-#     technical_final = (0.7 * technical_score) + (0.3 * general_score)
-#     technical_final = technical_final + (boost * 0.5)
-#     technical_final = technical_final * (1 - penalty)
-    
-#     # Admin Track: امتیاز اداری با تأثیر بیشتر General
-#     admin_final = (0.3 * technical_score) + (0.7 * general_score)
-#     admin_final = admin_final + (boost * 0.3)
-#     admin_final = admin_final * (1 - penalty * 0.7)  # Penalty کمتر برای اداری‌ها
-    
-#     # Hybrid Track: ترکیب متعادل
-#     hybrid_final = (0.5 * technical_score) + (0.5 * general_score)
-#     hybrid_final = hybrid_final + (boost * 0.5)
-#     hybrid_final = hybrid_final * (1 - penalty * 0.8)
-    
-#     # ====== انتخاب امتیاز نهایی بر اساس دسته‌بندی ======
-#     if category == "technical":
-#         final_score = technical_final
-#     elif category == "administrative":
-#         final_score = admin_final
-#         # Admin Safety Layer: حداقل ۳۰% برای نمایش
-#         final_score = max(final_score, 30)
-#         # Admin Cap: حداکثر ۵۵% (برای جلوگیری از dominance)
-#         final_score = min(final_score, 55)
-#     else:  # hybrid
-#         final_score = hybrid_final
-    
-#     # ====== اطمینان از محدوده ۰-۱۰۰ ======
-#     final_score = int(min(100, max(0, final_score)))
-    
-#     # ====== امتیازهای جداگانه برای نمایش ======
-#     return {
-#         'final': final_score,
-#         'technical': int(technical_score),
-#         'general': int(general_score),
-#         'boost': boost,
-#         'penalty': penalty_percent,
-#         'category': category,
-#         'technical_score_raw': int(technical_final),
-#         'admin_score_raw': int(admin_final),
-#         'hybrid_score_raw': int(hybrid_final)
-#     }
-
-def calculate_final_score_v73(
-    idx,
-    job_text,
-    resume_text,
-    embedding_score,
-    tfidf_score,
-    all_embedding_scores,
-    all_tfidf_scores,
-    semantic_matcher=None,
-    job_title=""
-):
-    """
-    نسخه نهایی تمیز شده (Production Safe)
-    معماری:
-    Semantic (Embedding) + Technical (TF-IDF) + General + Boost/Penalty
-    """
-
-    # =========================
-    # 📊 Core Signals
-    # =========================
-
-    # ❗ مهم: embedding فقط در semantic استفاده می‌شود
-    general_score = calculate_general_score(job_text, job_title)
-
-    keyword_score, matched_keywords, group_results = calculate_keyword_score(
-        job_text, "", job_text, job_title
-    )
-
-    boost = domain_boost(job_text, resume_text, semantic_matcher)
-    boost = min(max(boost, 0), 15)
-
-    penalty = generic_penalty(job_text)
-    penalty_percent = int(penalty * 100)
-
-    category = detect_job_category(job_title, job_text, tfidf_score, general_score)
-
-    # =========================
-    # 🔧 Normalization
-    # =========================
-
-    norm_embedding = max(0, min(embedding_score / 100, 1))
-    norm_tfidf = max(0, min(tfidf_score / 100, 1))
-    norm_keyword = max(0, min(keyword_score / 100, 1))
-    norm_general = max(0, min(general_score / 100, 1))
-
-    norm_boost = min(boost / 15, 0.8)
-    norm_penalty = min(penalty / 20, 0.8)
-
-    # =========================
-    # 🔀 Semantic Layer (ONLY embedding + keyword)
-    # =========================
-
-    combined_semantic = (
-        0.65 * norm_embedding +
-        0.35 * norm_keyword
-    )
-
-    # =========================
-    # ⚙️ Technical Layer (ONLY TF-IDF / lexical)
-    # =========================
-
-    technical_score = norm_tfidf
-
-    # =========================
-    # ⚖️ Final Weights
-    # =========================
-
-    W_SEMANTIC = 0.50
-    W_TECHNICAL = 0.25
-    W_GENERAL = 0.15
-    W_BOOST = 0.10
-    W_PENALTY = 0.05
-
-    # =========================
-    # 🧮 Final Score
-    # =========================
-
-    final_score = (
-        W_SEMANTIC * combined_semantic +
-        W_TECHNICAL * technical_score +
-        W_GENERAL * norm_general +
-        W_BOOST * norm_boost -
-        W_PENALTY * norm_penalty
-    )
-
-    final_score = int(max(0, min(final_score * 100, 100)))
-
-    # =========================
-    # 📤 Output
-    # =========================
-
-    return {
-        "final": final_score,
-
-        "technical": int(technical_score * 100),
-        "general": int(general_score),
-        "keyword": int(keyword_score),
-
-        "boost": boost,
-        "penalty": penalty_percent,
-        "category": category,
-
-        "weights": {
-            "semantic": W_SEMANTIC,
-            "technical": W_TECHNICAL,
-            "general": W_GENERAL,
-            "boost": W_BOOST,
-            "penalty": W_PENALTY
-        },
-
-        "combined_semantic": combined_semantic,
-        "matched_keywords": matched_keywords,
-        "group_results": group_results
-    }
 warnings.filterwarnings('ignore')
 
 
-# ==========================================
-# LEVEL 3: SEMANTIC MATCHING WITH TF-IDF
-# ==========================================
+# =========================
+# 📋 کلمات کلیدی
+# =========================
+
+FUNCTIONAL_VERBS = [
+    # فارسی
+    "طراحی", "پیاده‌سازی", "بهینه‌سازی", "یکپارچه‌سازی", "مدیریت", "ساخت",
+    "توسعه", "برنامه‌نویسی", "تحلیل", "ارزیابی", "نگهداری", "پشتیبانی",
+    # انگلیسی
+    "design", "develop", "implement", "optimize", "integrate",
+    "manage", "build", "create", "analyze", "maintain", "support",
+    # ترکیبی
+    "responsible for", "work on", "in charge of",
+    "architecture", "engineering", "deployment"
+]
+
+SOFT_KEYWORDS = [
+    # فارسی
+    "توانایی", "مسئولیت", "دقت", "تیم", "ارتباط", "مدیریت زمان",
+    "یادگیری", "خلاقیت", "تحلیل", "حل مسئله", "گزارش‌نویسی",
+    "مستندسازی", "همکاری", "انعطاف‌پذیری", "خودانگیخته",
+    # انگلیسی
+    "ability", "responsibility", "accuracy", "team", "communication",
+    "management", "learning", "creativity", "analysis", "problem solving",
+    "collaboration", "ownership", "attention to detail",
+    "self-motivated", "fast learner", "adaptability"
+]
 
 
+# =========================
+# 🧠 HARD SCORE - روش کلمه‌ای (کلیدواژه‌ای)
+# =========================
 
-def semantic_match_score(job_text, resume_text, skill_keywords):
-    """محاسبه‌ی شباهت معنایی با TF-IDF و Cosine Similarity"""
-    if not job_text or not resume_text:
+def calculate_keyword_score(skills_text: str) -> float:
+    """
+    روش قبلی برای تطابق کلمه‌ای (بدون سطح)
+    """
+    if not skills_text:
         return 0
     
-    enhanced_resume = resume_text + " " + " ".join(skill_keywords * 2)
-    job_text_clean = re.sub(r'[^\w\s\u0600-\u06FF]', ' ', job_text).lower()
-    resume_clean = re.sub(r'[^\w\s\u0600-\u06FF]', ' ', enhanced_resume).lower()
+    skills_normalized = TextNormalizer.normalize(skills_text.lower())
+    
+    total_score = 0
+    max_possible = 0
+    
+    for group_name, group in SKILL_GROUPS.items():
+        keywords = group["keywords"]
+        base_weight = group["base_weight"]
+        min_matches = group["min_matches_for_bonus"]
+        bonus_per_match = group["bonus_per_match"]
+        
+        matches = 0
+        for kw in keywords:
+            kw_normalized = TextNormalizer.normalize(kw.lower())
+            if kw_normalized in skills_normalized:
+                matches += 1
+        
+        if matches > 0:
+            group_score = base_weight * min(matches, 3)
+            if matches >= min_matches:
+                group_score += (matches - min_matches) * bonus_per_match
+            total_score += group_score
+        
+        max_possible += base_weight * 3 + (3 - min_matches) * bonus_per_match
+    
+    if max_possible == 0:
+        return 0
+    
+    raw_percent = (total_score / max_possible) * 100
+    normalized = (raw_percent / 50) * 100
+    normalized = min(normalized, 100)
+    
+    return round(normalized, 2)
+
+
+# =========================
+# 🧠 HARD SCORE - نسخه ترکیبی (سطح‌بندی + کلمه‌ای)
+# =========================
+
+def calculate_hard_score(skills_text: str, resume_skills_dict: dict = None) -> float:
+    """
+    محاسبه امتیاز مهارت‌های سخت
+    - اگر resume_skills_dict موجود باشه: از روش سطح‌بندی استفاده می‌کنه
+    - در غیر این صورت: از روش قبلی (کلمه‌ای) استفاده می‌کنه
+    """
+    if not skills_text:
+        # print(f"   ⚠️ skills_text خالی است!")  # ✅ دیباگ
+
+        return 0
+    # print(f"   🔍 skills_text: {skills_text[:100]}...") 
+    # print(f"   📋 resume_skills_dict: {resume_skills_dict}")
+    # ========================================
+    # روش جدید: سطح‌بندی شده
+    # ========================================
+    if resume_skills_dict:
+        job_skills = parse_skills_with_level(skills_text)
+        if job_skills:
+            # امتیاز تطابق سطح‌بندی شده
+            level_score = calculate_skill_match_score(resume_skills_dict, job_skills)
+            
+            # امتیاز کلمه‌ای (برای پوشش بهتر)
+            keyword_score = calculate_keyword_score(skills_text)
+            
+            # 70% سطح‌بندی + 30% کلمه‌ای
+            combined_score = (level_score * 0.70) + (keyword_score * 0.30)
+            return round(min(combined_score, 100), 2)
+    
+    # ========================================
+    # روش قبلی: کلمه‌ای
+    # ========================================
+    return calculate_keyword_score(skills_text)
+
+
+# =========================
+# ⚙️ FUNCTIONAL SCORE (با نرمال‌سازی)
+# =========================
+
+def calculate_functional_score(description: str) -> float:
+    """محاسبه امتیاز وظایف شغلی با نرمال‌سازی"""
+    if not description:
+        return 0
+    
+    text = TextNormalizer.normalize(description.lower())
+    score = 0
+    
+    for verb in FUNCTIONAL_VERBS:
+        verb_norm = TextNormalizer.normalize(verb.lower())
+        if verb_norm in text:
+            score += 2
+    
+    tech_bonus = len(re.findall(r"python|api|database|sql|system|backend|frontend|cloud", text))
+    score += tech_bonus * 1.5
+    
+    unique_verbs = {TextNormalizer.normalize(v.lower()) for v in FUNCTIONAL_VERBS if TextNormalizer.normalize(v.lower()) in text}
+    if len(unique_verbs) >= 5:
+        score += 5
+    elif len(unique_verbs) >= 3:
+        score += 3
+    
+    return round(min(score * 1.5, 100), 2)
+
+
+# =========================
+# 💬 SOFT SCORE (با نرمال‌سازی)
+# =========================
+
+def calculate_soft_score(description: str) -> float:
+    """محاسبه امتیاز مهارت‌های نرم با نرمال‌سازی"""
+    if not description:
+        return 0
+    
+    text = TextNormalizer.normalize(description.lower())
+    score = 0
+    
+    for kw in SOFT_KEYWORDS:
+        kw_norm = TextNormalizer.normalize(kw.lower())
+        if kw_norm in text:
+            score += 1.5
+    
+    unique_soft = {TextNormalizer.normalize(k.lower()) for k in SOFT_KEYWORDS if TextNormalizer.normalize(k.lower()) in text}
+    if len(unique_soft) >= 4:
+        score += 5
+    elif len(unique_soft) >= 2:
+        score += 3
+    
+    return round(min(score * 1.8, 100), 2)
+
+
+# =========================
+# 🧠 SEMANTIC SCORE
+# =========================
+
+def calculate_semantic_score(description: str, resume_text: str, semantic_matcher) -> float:
+    """محاسبه شباهت معنایی بین شرح شغل و رزومه"""
+    if not description or not resume_text or not semantic_matcher:
+        return 0
     
     try:
-        corpus = [job_text_clean, resume_clean]
-        vectorizer = TfidfVectorizer(
-            max_features=500,
-            stop_words=None,
-            ngram_range=(1, 2),
-            min_df=1
-        )
-        
-        tfidf_matrix = vectorizer.fit_transform(corpus)
-        similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])
-        
-        return similarity[0][0] * 100
-        
+        if hasattr(semantic_matcher, 'calculate_similarity'):
+            return semantic_matcher.calculate_similarity(description, resume_text)
+        else:
+            embeddings = semantic_matcher.encode_texts([description, resume_text])
+            if embeddings is not None:
+                from sklearn.metrics.pairwise import cosine_similarity
+                sim = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
+                return float(sim * 100)
     except Exception as e:
-        print(f"  ⚠️ TF-IDF Error: {e}")
+        print(f"⚠️ Semantic score error: {e}")
         return 0
+    
+    return 0
 
-
+# =========================
+# 📊 OUTLIER SCORE
+# =========================
 
 def calculate_outlier_score(scores_list, current_score):
+    
     import numpy as np
     
     if len(scores_list) < 5:
@@ -437,114 +248,121 @@ def calculate_outlier_score(scores_list, current_score):
         final = percentile
     
     return int(np.clip(final, 0, 100))
-# ==========================================
-# CALCULATE KEYWORD SCORE
-# ==========================================
-def calculate_keyword_score(full_text, requirements_text, description_text, title_text):
-    """محاسبه‌ی امتیاز بر اساس کلمات کلیدی (سطح ۲)"""
-    
-    full_text_lower = full_text.lower()
-    requirements_lower = requirements_text.lower()
-    description_lower = description_text.lower()
-    title_lower = title_text.lower()
-    
-    group_weight_multipliers = defaultdict(float)
-    for keyword, group_names in JOB_TITLE_WEIGHT_MAP.items():
-        if keyword.lower() in title_lower:
-            for group_name in group_names:
-                group_weight_multipliers[group_name] = max(
-                    group_weight_multipliers[group_name], 1.5
-                )
-    
-    group_results = {}
-    total_score = 0
-    all_matched_keywords = []
-    
-    for group_name, group_config in SKILL_GROUPS.items():
-        keywords = group_config["keywords"]
-        base_weight = group_config["base_weight"]
-        bonus_per_match = group_config["bonus_per_match"]
-        min_matches_for_bonus = group_config["min_matches_for_bonus"]
-        
-        multiplier = group_weight_multipliers.get(group_name, 1.0)
-        effective_weight = base_weight * multiplier
-        
-        matched = []
-        match_count = 0
-        
-        for keyword in keywords:
-            keyword_lower = keyword.lower()
-            
-            importance_score = 0
-            if keyword_lower in requirements_lower:
-                importance_score += 2
-            if keyword_lower in description_lower:
-                importance_score += 1.2
-            if keyword_lower in full_text_lower:
-                importance_score += 0.8
-            
-            if importance_score > 0:
-                count_in_text = full_text_lower.count(keyword_lower)
-                count_in_req = requirements_lower.count(keyword_lower)
-                
-                total_occurrences = min(count_in_text + count_in_req * 2, 5)
-                match_count += total_occurrences
-                matched.append(keyword)
-                all_matched_keywords.append(keyword)
-        
-        bonus = 0
-        if match_count >= min_matches_for_bonus:
-            bonus = min(match_count * bonus_per_match, effective_weight * 0.5)
-        
-        group_score = (match_count * effective_weight * 0.3) + bonus
-        group_results[group_name] = {
-            "score": int(group_score),
-            "match_count": match_count,
-            "matched_keywords": matched[:10],
-            "effective_weight": effective_weight,
-            "bonus": int(bonus),
-            "multiplier": multiplier
-        }
-        total_score += group_score
-    
-    max_possible_score = sum([
-        config["base_weight"] * 5 * 0.3 + (config["base_weight"] * 0.5) 
-        for config in SKILL_GROUPS.values()
-    ])
-    
-    if max_possible_score == 0:
-        return 0, [], {}
-    
-    percentage = int((total_score / max_possible_score) * 100)
-    matched_keywords = list(set(all_matched_keywords))[:20]
-    
-    return min(100, percentage), matched_keywords, group_results
 
-# ==========================================
-# CALCULATE MATCH SCORE (سطح ۲ + ۳)
-# ==========================================
-def calculate_match_score_advanced(sections, job_title="", all_scores=None):
-    """ترکیب سطح ۲ (گروه‌بندی) و سطح ۳ (TF-IDF + Outlier)"""
+
+
+# =========================
+# 🔥 FINAL SCORE
+# =========================
+
+def calculate_final_score_v8(
+    skills: str,
+    description: str,
+    requirements: str,
+    resume_text: str,
+    resume_info: dict,
+    job_category: str,
+    semantic_matcher=None,
+    resume_skills: dict = None
+) -> dict:
+    """محاسبه امتیاز نهایی با معماری جدید"""
     
-    if not sections:
-        return 0, [], {}, 0, 0
+    eligibility_result = check_eligibility(requirements, resume_info)
+    penalty = eligibility_result['penalty']
     
-    full_text = sections.get("full_text", "")
-    requirements_text = sections.get("requirements", "")
-    description_text = sections.get("description", "")
-    title_text = sections.get("title", "") or job_title
+    # ارسال resume_skills به calculate_hard_score
+    hard_score = calculate_hard_score(skills, resume_skills)
+    func_score = calculate_functional_score(description)
+    soft_score = calculate_soft_score(description)
+    semantic_score = calculate_semantic_score(description, resume_text, semantic_matcher)
     
-    keyword_score, matched_keywords, group_results = calculate_keyword_score(
-        full_text, requirements_text, description_text, title_text
+    weights = get_weights(job_category)
+    
+    raw_score = (
+        weights['hard'] * hard_score +
+        weights['functional'] * func_score +
+        weights['soft'] * soft_score +
+        weights['semantic'] * semantic_score
     )
     
-    combined_job_text = f"{title_text} {description_text} {requirements_text}"
-    semantic_score = semantic_match_score(combined_job_text, RESUME_TEXT, matched_keywords)
+    final_score = raw_score * (1 - penalty / 100)
+    final_score = round(min(max(final_score, 0), 100), 2)
     
-    final_score = int((keyword_score * 0.7) + (semantic_score * 0.3))
+    return {
+        'final': final_score,
+        'raw': round(raw_score, 2),
+        'penalty': penalty,
+        'penalty_reasons': eligibility_result['reasons'],
+        'scores': {
+            'hard': hard_score,
+            'functional': func_score,
+            'soft': soft_score,
+            'semantic': semantic_score
+        },
+        'weights': weights,
+        'eligibility_details': eligibility_result['details']
+    }
+
+
+# =========================
+# 📋 نسخه ساده برای تست
+# =========================
+
+def calculate_final_simple(skills: str, description: str, job_category: str = "technical") -> dict:
+    """نسخه ساده برای تست سریع (بدون embedding و resume)"""
+    hard = calculate_hard_score(skills)
+    func = calculate_functional_score(description)
+    soft = calculate_soft_score(description)
+    weights = get_weights(job_category)
     
-    outlier_score = 0
-    if all_scores and len(all_scores) > 2:
-        outlier_score = calculate_outlier_score(all_scores, final_score)
+    final = (
+        weights['hard'] * hard +
+        weights['functional'] * func +
+        weights['soft'] * soft
+    )
     
-    return final_score, matched_keywords, group_results, semantic_score, outlier_score
+    return {
+        'final': round(final, 2),
+        'hard': hard,
+        'functional': func,
+        'soft': soft,
+        'weights': weights
+    }
+
+
+# =========================
+# 🧪 تست
+# =========================
+if __name__ == "__main__":
+    print("=" * 50)
+    print("🧪 TESTING SCORE CALCULATOR v8 (با نرمال‌سازی + سطح‌بندی)")
+    print("=" * 50)
+    
+    # رزومه نمونه با سطح
+    resume_skills = {
+        "python": "پیشرفته",
+        "c++": "متوسط",
+        "opencv": "پیشرفته",
+        "linux": "مقدماتی",
+        "git": "متوسط"
+    }
+    
+    skills = "نرم افزارها Python | پیشرفته Django | پیشرفته React | مقدماتی GIT | پیشرفته"
+    description = """
+    شرح شغل و وظایف: توسعه و نگهداری سرویس‌های Backend با Python و Django. 
+    طراحی REST API و پیاده‌سازی میکروسرویس‌ها. 
+    همکاری با تیم محصول و مستندسازی.
+    """
+    requirements = "شرایط احراز: سن 22 - 35 سال، جنسیت تفاوتی ندارد، تحصیلات کارشناسی"
+    
+    # تست با resume_skills
+    result = calculate_final_simple(skills, description, "توسعه نرم افزار و برنامه نویسی")
+    print(f"\n📊 Simple Test (بدون سطح‌بندی):")
+    print(f"   Final: {result['final']}")
+    print(f"   Hard: {result['hard']}")
+    print(f"   Functional: {result['functional']}")
+    print(f"   Soft: {result['soft']}")
+    
+    # تست با سطح‌بندی
+    hard_score = calculate_hard_score(skills, resume_skills)
+    print(f"\n📊 Hard Score با سطح‌بندی: {hard_score}%")

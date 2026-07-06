@@ -218,6 +218,7 @@ def save_score(job_id, score_data):
     conn.commit()
     conn.close()
 
+
 def save_scraping_log(total_pages, total_jobs, new_jobs, failed, duration_seconds, started_at, finished_at):
     """ذخیره تاریخچه یک اجرای اسکرپ"""
     conn = get_connection()
@@ -267,13 +268,26 @@ def get_jobs_by_company(company, limit=100):
 
 
 def get_all_jobs(limit=1000):
-    """دریافت همه آگهی‌ها"""
+    """
+    دریافت همه آگهی‌ها با ترتیب مشخص
+    
+    ترتیب ستون‌ها مطابق با ساختار جدول:
+    (id, title, company, url, location, salary, is_urgent,
+     description, requirements, full_text, skills, age_range,
+     gender, job_category, site, job_hash, scraped_at)
+    """
     conn = get_connection()
     cursor = conn.cursor()
+    
+    # ✅ ترتیب دقیق مطابق با ساختار جدول
     cursor.execute("""
-        SELECT * FROM jobvision_jobs_clean 
+        SELECT id, title, company, url, location, salary, is_urgent,
+               description, requirements, full_text, skills, age_range,
+               gender, job_category, site, job_hash, scraped_at
+        FROM jobvision_jobs_clean 
         ORDER BY scraped_at DESC LIMIT ?
     """, (limit,))
+    
     results = cursor.fetchall()
     conn.close()
     return results
@@ -284,7 +298,10 @@ def get_jobs_by_category(category, limit=1000):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT * FROM jobvision_jobs_clean 
+        SELECT id, title, company, url, location, salary, is_urgent,
+               description, requirements, full_text, skills, age_range,
+               gender, job_category, site, job_hash, scraped_at
+        FROM jobvision_jobs_clean 
         WHERE job_category = ? 
         ORDER BY scraped_at DESC LIMIT ?
     """, (category, limit))

@@ -69,6 +69,7 @@ jobs:
         run: |
           echo "Key length = ${#ENCRYPTION_KEY}"
           ls -la config
+          ls -la matcher
           ls -la data
           ls -la cache || true
 
@@ -116,7 +117,66 @@ jobs:
         env:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: |
-          python decrypt_files.py
+          python << 'EOF'
+          from cryptography.fernet import Fernet
+          import os
+
+          key = os.environ["ENCRYPTION_KEY"]
+          cipher = Fernet(key.encode())
+
+          files = [
+              ("config/settings.py.enc", "config/settings.py"),
+              ("config/resume.py.enc", "config/resume.py"),
+              ("matcher/skill_groups.py.enc", "matcher/skill_groups.py"),
+          ]
+
+          for enc_file, dec_file in files:
+              if os.path.exists(enc_file):
+                  with open(enc_file, "rb") as f:
+                      encrypted = f.read()
+
+                  decrypted = cipher.decrypt(encrypted)
+
+                  with open(dec_file, "wb") as f:
+                      f.write(decrypted)
+
+                  print(f"✅ {enc_file} -> {dec_file}")
+              else:
+                  print(f"⚠️ {enc_file} not found")
+
+          print("✅ Config decrypted")
+          EOF
+
+      # ==========================================
+      # 🔥 Decrypt Weights (NEW)
+      # ==========================================
+      - name: Decrypt Weights
+        env:
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+        run: |
+          python << 'EOF'
+          from cryptography.fernet import Fernet
+          import os
+
+          key = os.environ["ENCRYPTION_KEY"]
+          cipher = Fernet(key.encode())
+
+          enc_weights = "matcher/weights.py.enc"
+          weights = "matcher/weights.py"
+
+          if os.path.exists(enc_weights):
+              with open(enc_weights, "rb") as f:
+                  encrypted = f.read()
+
+              decrypted = cipher.decrypt(encrypted)
+
+              with open(weights, "wb") as f:
+                  f.write(decrypted)
+
+              print("✅ Weights decrypted")
+          else:
+              print("⚠️ weights.py.enc not found")
+          EOF
 
       # ==========================================
       # Decrypt Database
@@ -136,7 +196,6 @@ jobs:
           db = "data/jobs_db_clean.db"
 
           if os.path.exists(enc_db):
-
               with open(enc_db, "rb") as f:
                   encrypted = f.read()
 
@@ -146,9 +205,8 @@ jobs:
                   f.write(decrypted)
 
               print("✅ Database decrypted")
-
           else:
-              print("⚠️ jobs.db.enc not found")
+              print("⚠️ jobs_db_clean.db.enc not found")
           EOF
 
       # ==========================================
@@ -190,7 +248,6 @@ jobs:
           db = "data/jobs_db_clean.db"
 
           if os.path.exists(db):
-
               with open(db, "rb") as f:
                   raw = f.read()
 
@@ -200,9 +257,8 @@ jobs:
                   f.write(encrypted)
 
               print("✅ Database encrypted")
-
           else:
-              print("⚠️ jobs.db not found")
+              print("⚠️ jobs_db_clean.db not found")
           EOF
 
       # ==========================================
@@ -219,7 +275,7 @@ jobs:
           git push
 
       # ==========================================
-      # 🔥 Encrypt Cache and Commit
+      # Encrypt Cache and Commit
       # ==========================================
       - name: Encrypt Cache and Commit
         env:

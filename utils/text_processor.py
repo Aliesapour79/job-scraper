@@ -149,6 +149,7 @@ def extract_salary(text):
 # SKILLS (ONLY SOFTWARES)
 # =========================
 
+#text_processor.py
 def extract_skills_from_requirements(text):
     """
     استخراج فقط لیست نرم افزارها (فارسی و انگلیسی)
@@ -169,32 +170,42 @@ def extract_skills_from_requirements(text):
             end = min(end, idx)
 
     block = text[start:end]
-
+    tokens = re.split(r"\||\n", block)
+    tokens = [t.strip() for t in tokens if t and t.strip()]
+    
     skills = []
+    i=0
+    while i < len(tokens):
+        token = tokens[i].strip()
 
-    for line in block.splitlines():
-        line = line.strip()
-
-        if not line:
+        if token in ["نرم افزارها", "Software"]:
+            i += 1
             continue
 
-        # حذف خطوط اضافی
-        if line in ["|", "نرم افزارها", "Software"]:
+        if token in LEVELS:
+            i += 1
             continue
 
-        # حذف سطوح مهارت (فارسی و انگلیسی)
-        if line in LEVELS:
-            continue
+        skill = token
+        level = ""
 
-        # درصد مهارت
-        if re.fullmatch(r"\d+٪?", line):
-            continue
+        if i + 1 < len(tokens):
+            next_token = tokens[i + 1].strip()
 
-        skills.append(line)
+            if next_token in LEVELS:
+                level = next_token
+                i += 2
+            else:
+                i += 1
+        else:
+            i += 1
 
-    skills = list(dict.fromkeys(skills))
-    return ", ".join(skills)
+        if level:
+            skills.append(f"{skill} ({level})")
+        else:
+            skills.append(skill)
 
+    return ", ".join(dict.fromkeys(skills))
 
 def clean_requirements(text):
     """

@@ -3,37 +3,45 @@
 # ماژول تطبیق شغلی - دسترسی آسان به همه توابع
 # ==========================================
 
-from .skill_groups import SKILL_GROUPS, JOB_TITLE_WEIGHT_MAP
+# =========================
+# 🔥 داده‌ها
+# =========================
+from .skill_groups import SKILL_GROUPS
+
+# =========================
+# 🆕 v8: توابع جدید
+# =========================
+from .weights import get_weights, get_job_group, WEIGHTS_CONFIG
+from .eligibility import check_eligibility
 from .score_calculator import (
-    generic_penalty,
-    calculate_general_score,
-    domain_boost,
-    min_max_normalize,
-    detect_job_category,
-    calculate_final_score_v73,
-    semantic_match_score,
-    calculate_outlier_score,
-    calculate_keyword_score,
-    calculate_match_score_advanced
+    calculate_hard_score,
+    calculate_functional_score,
+    calculate_soft_score,
+    calculate_semantic_score,
+    calculate_final_score_v8,
+    calculate_final_simple,
+    calculate_outlier_score 
 )
+from .explainability import generate_explanation
 
-# ==========================================
-# توابع اسکرپر (از scrapers وارد می‌شوند)
-# ==========================================
-from scrapers import extract_all_jobs
-
+# =========================
+# 📋 لیست exportها
+# =========================
 __all__ = [
+    # داده‌ها
     'SKILL_GROUPS',
-    'JOB_TITLE_WEIGHT_MAP',
-    'generic_penalty',
-    'calculate_general_score',
-    'domain_boost',
-    'min_max_normalize',
-    'detect_job_category',
-    'calculate_final_score_v73',
-    'semantic_match_score',
+    
+    # v8 جدید
+    'get_weights',
+    'get_job_group',
+    'WEIGHTS_CONFIG',
+    'check_eligibility',
+    'calculate_hard_score',
+    'calculate_functional_score',
+    'calculate_soft_score',
+    'calculate_semantic_score',
+    'calculate_final_score_v8',
+    'calculate_final_simple',
+    'generate_explanation',
     'calculate_outlier_score',
-    'calculate_keyword_score',
-    'calculate_match_score_advanced',
-    'extract_all_jobs',  # اضافه شد
 ]

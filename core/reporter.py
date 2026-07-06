@@ -13,7 +13,7 @@ def generate_output(results, filters, enable_output=True):
         print("   Run with ENABLE_OUTPUT=True to generate files.")
         return results
 
-    min_score = filters.get('min_score', 20)
+    min_score = filters.get('min_score', 0)
     filtered = [r for r in results if r['score'] >= min_score]
     filtered.sort(key=lambda x: x['score'], reverse=True)
 
@@ -23,8 +23,8 @@ def generate_output(results, filters, enable_output=True):
 
     ts = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-    json_file = f"output/job_matches_v7_{ts}.json"
-    html_file = f"output/job_report_v7_{ts}.html"
+    json_file = f"output/job_matches_v8{ts}.json"
+    html_file = f"output/job_report_v8{ts}.html"
 
     with open(json_file, "w", encoding="utf-8") as f:
         json.dump(filtered, f, ensure_ascii=False, indent=2)

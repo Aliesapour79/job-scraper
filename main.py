@@ -1,4 +1,4 @@
-# main.py - نسخه نهایی با امتیازدهی به همه آگهی‌ها + ذخیره در دیتابیس
+# main.py - نسخه v8
 
 import os
 import sys
@@ -31,6 +31,13 @@ if os.path.exists(skill_enc):
     if skill_content:
         exec(skill_content, globals())
 
+# 4. رمز گشایی matcher/weights.py
+weights = "matcher/weights.py.enc"
+if os.path.exists(weights):
+    weights_content = decrypt_file_to_string(weights)
+    if weights_content:
+        exec(weights_content, globals())
+
 # =========================
 # Imports
 # =========================
@@ -40,8 +47,10 @@ from scrapers import JobvisionScraper
 from utils import setup_driver
 from utils.database import get_stats, init_db, get_all_jobs, save_score
 from utils.driver_manager import safe_driver_get
+from tqdm import tqdm
 
-from core import load_site_jobs, filter_new_jobs, extract_job_details, score_jobs, generate_output
+from core import load_site_jobs, filter_new_jobs, extract_job_details, generate_output
+from core.scorer import score_jobs  # ← v8 scorer
 
 
 # =========================
@@ -58,7 +67,7 @@ MAX_DRIVER_RETRIES = 3
 ENABLE_PROCESSING = True
 ENABLE_OUTPUT = True
 ENABLE_DB_SAVE = True
-from tqdm import tqdm
+
 
 # =========================
 # 🛠️ توابع کمکی
@@ -80,8 +89,8 @@ def save_partial(all_jobs, count):
 def print_status():
     """نمایش وضعیت"""
     print("=" * 80)
-    print("🚀 JOB MATCHER v7 - STABLE PRODUCTION MODE")
-    print("   (Multi-Site: e-estekhdam + Jobvision)")
+    print("🚀 JOB MATCHER v8 - STABLE PRODUCTION MODE")
+    print("   (Multi-Site: Jobvision)")
     print("=" * 80)
     print(f"\n📋 MODE STATUS:")
     print(f"   🧠 Processing (Scoring): {'✅ ENABLED' if ENABLE_PROCESSING else '❌ DISABLED'}")
@@ -102,8 +111,8 @@ def save_scores_to_db(results):
     
     for result in tqdm(results, desc="Saving scores", unit="score"):
         try:
-            # پیدا کردن job_id بر اساس URL
-            cursor.execute("SELECT id FROM jobvision_jobs_clean_clean WHERE url = ?", (result.get('url'),))
+            # 🔥 جدول درست
+            cursor.execute("SELECT id FROM jobvision_jobs_clean WHERE url = ?", (result.get('url'),))
             row = cursor.fetchone()
             
             if row:
@@ -186,7 +195,7 @@ def main():
     ]
 
     driver = setup_driver()
-    all_jobs = []  # فقط برای آگهی‌های جدید (برای استخراج)
+    all_jobs = []
     
     config = {
         'RESTART_EVERY': RESTART_EVERY,
@@ -249,13 +258,12 @@ def main():
             return
 
         # =========================
-        # مرحله ۳: امتیازدهی به همه آگهی‌های دیتابیس
+        # مرحله ۳: امتیازدهی با v8
         # =========================
         print("\n" + "=" * 80)
-        print("📊 SCORING ALL JOBS IN DATABASE")
+        print("📊 SCORING ALL JOBS IN DATABASE (v8)")
         print("=" * 80)
         
-        # گرفتن همه آگهی‌ها از دیتابیس
         all_db_jobs = get_all_jobs(limit=10000)
         print(f"📋 Total jobs in database: {len(all_db_jobs)}")
         
@@ -263,12 +271,12 @@ def main():
             print("❌ No jobs in database to score!")
             return
         
-        # امتیازدهی به همه
+        # 🔥 امتیازدهی با v8
         results = score_jobs(all_db_jobs, semantic_matcher, RESUME_TEXT)
         generate_output(results, FILTERS, ENABLE_OUTPUT)
         
         # =========================
-        # 🔥 مرحله ۴: ذخیره امتیازها در دیتابیس
+        # مرحله ۴: ذخیره امتیازها
         # =========================
         save_scores_to_db(results)
 

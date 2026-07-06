@@ -267,6 +267,8 @@ class JobvisionScraper:
             'gender': '',
             'salary': '',
             'full_text': '',
+            'location': '',
+            'is_urgent': False,
             'site': self.site_name,
             'url': url,
             'error': None
@@ -295,45 +297,75 @@ class JobvisionScraper:
                 # =========================
                 # 📄 full_text
                 # =========================
-                body = self.driver.find_element(By.TAG_NAME, 'body')
-                full_text = body.text
-                detail['full_text'] = full_text
+                try:
+                    body = self.driver.find_element(By.TAG_NAME, 'body')
+                    full_text = body.text
+                    detail['full_text'] = full_text
+                except Exception as e:
+                    print(f"     ⚠️ Error getting full_text: {e}")
+                    detail['error'] = str(e)
+                    return detail
+
+                # =========================
+                # 📍 location
+                # =========================
+                try:
+                    location_elem = self.driver.find_element(By.CSS_SELECTOR, 'span.jvt-pointer-events-none')
+                    detail['location'] = location_elem.text.strip()
+                except:
+                    detail['location'] = ''
+
+                # =========================
+                # 🔥 is_urgent
+                # =========================
+                try:
+                    self.driver.find_element(By.CSS_SELECTOR, 'div.urgent-tag')
+                    detail['is_urgent'] = True
+                except:
+                    detail['is_urgent'] = False
 
                 # =========================
                 # 🔥 ETL: استخراج از full_text
                 # =========================
-                text = normalize(full_text)
+                try:
+                    text = normalize(full_text)
+                    text_skills = full_text
+                    
+                    # ۱. شرح شغل (description)
+                    description_text = extract_section(text, 
+                        ["شرح شغل و وظایف", "Job Description"], 
+                        ["شرایط احراز شغل", "Job Requirements"]
+                    )
+                    detail['description'] = description_text
 
-                # ۱. شرح شغل (description)
-                description_text = extract_section(text, 
-                    ["شرح شغل و وظایف", "Job Description"], 
-                    ["شرایط احراز شغل", "Job Requirements"]
-                )
-                detail['description'] = description_text
+                    # ۲. شرایط احراز (requirements)
+                    requirements_text = extract_section(text, 
+                        ["شرایط احراز شغل", "Job Requirements"], 
+                        ["ثبت مشکل و تخلف آگهی", "موقعیت های شغلی مشابه", "ارسال رزومه"]
+                    )
+                    requirements_text = clean_requirements(requirements_text)
+                    detail['requirements'] = requirements_text
 
-                # ۲. شرایط احراز (requirements)
-                requirements_text = extract_section(text, 
-                    ["شرایط احراز شغل", "Job Requirements"], 
-                    ["ثبت مشکل و تخلف آگهی", "موقعیت های شغلی مشابه", "ارسال رزومه"]
-                )
-                requirements_text = clean_requirements(requirements_text)
-                detail['requirements'] = requirements_text
+                    # ۳. مهارت‌ها (skills)
+                    skills_text = extract_skills_from_requirements(text_skills)
+                    detail['skills'] = skills_text
 
-                # ۳. مهارت‌ها (skills) - استخراج از بخش نرم افزارها
-                skills_text = extract_skills_from_requirements(text)
-                detail['skills'] = skills_text
+                    # ۴. حقوق (salary)
+                    salary = extract_salary(text)
+                    detail['salary'] = salary
 
-                # ۴. حقوق (salary)
-                salary = extract_salary(text)
-                detail['salary'] = salary
+                    # ۵. محدوده سنی (age_range)
+                    age_range = extract_age(requirements_text)
+                    detail['age_range'] = age_range
 
-                # ۵. محدوده سنی (age_range) - از requirements استخراج میشه
-                age_range = extract_age(requirements_text)
-                detail['age_range'] = age_range
+                    # ۶. جنسیت (gender)
+                    gender = extract_gender(requirements_text)
+                    detail['gender'] = gender
 
-                # ۶. جنسیت (gender) - از requirements استخراج میشه
-                gender = extract_gender(requirements_text)
-                detail['gender'] = gender
+                except Exception as e:
+                    print(f"     ⚠️ Error in ETL processing: {e}")
+                    detail['error'] = str(e)
+                    return detail
 
                 return detail
 
