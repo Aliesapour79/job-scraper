@@ -9,8 +9,7 @@ config/settings.py
 !config/settings.py.enc
 matcher/skill_groups.py
 !matcher/skill_groups.py.enc
-matcher/weights.py
-!matcher/weights.py.enc
+
 .env
 local.env
 *.key
