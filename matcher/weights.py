@@ -24,16 +24,16 @@ ADMINISTRATIVE_CATEGORIES = [
 
 WEIGHTS_CONFIG = {
     "technical": {
-        "hard": 0.40,
-        "functional": 0.25,
+        "hard": 0.50,
+        "functional": 0.20,
         "soft": 0.10,
-        "semantic": 0.25
+        "semantic": 0.20
     },
     "administrative": {
-        "hard": 0.15,
-        "functional": 0.25,
-        "soft": 0.40,
-        "semantic": 0.20
+        "hard": 0.20,
+        "functional": 0.30,
+        "soft": 0.20,
+        "semantic": 0.30
     },
     "hybrid": {
         "hard": 0.35,
