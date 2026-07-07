@@ -226,7 +226,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          python -c "from telegram.sender import send_top_jobs; send_top_jobs(30)"
+          python -c "from telegram.sender import send_top_jobs; send_top_jobs(50)"
 
       # ==========================================
       # Upload Artifacts
